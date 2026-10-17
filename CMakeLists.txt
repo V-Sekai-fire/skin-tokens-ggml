@@ -113,6 +113,7 @@ add_library(skintokens SHARED
   src/skin_vae.cpp
   src/tokenizer.cpp
   src/weights.cpp
+  src/file_source.cpp
 )
 add_library(skintokens::skintokens ALIAS skintokens)
 target_include_directories(skintokens PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> PRIVATE src)
@@ -169,25 +170,25 @@ if(UNIX AND NOT APPLE)
 endif()
 
 add_executable(skintokens-qwen-parity
-  tools/qwen_parity.cpp src/backend.cpp src/qwen.cpp src/weights.cpp)
+  tools/qwen_parity.cpp src/backend.cpp src/qwen.cpp src/weights.cpp src/file_source.cpp)
 target_include_directories(skintokens-qwen-parity PRIVATE src include)
 target_link_libraries(skintokens-qwen-parity PRIVATE ggml Threads::Threads)
 set_target_properties(skintokens-qwen-parity PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 add_executable(skintokens-mesh-parity
-  tools/mesh_parity.cpp src/backend.cpp src/mesh_encoder.cpp src/weights.cpp)
+  tools/mesh_parity.cpp src/backend.cpp src/mesh_encoder.cpp src/weights.cpp src/file_source.cpp)
 target_include_directories(skintokens-mesh-parity PRIVATE src include)
 target_link_libraries(skintokens-mesh-parity PRIVATE ggml Threads::Threads)
 set_target_properties(skintokens-mesh-parity PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 add_executable(skintokens-vae-parity
-  tools/vae_parity.cpp src/backend.cpp src/skin_vae.cpp src/weights.cpp)
+  tools/vae_parity.cpp src/backend.cpp src/skin_vae.cpp src/weights.cpp src/file_source.cpp)
 target_include_directories(skintokens-vae-parity PRIVATE src include)
 target_link_libraries(skintokens-vae-parity PRIVATE ggml Threads::Threads)
 set_target_properties(skintokens-vae-parity PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 add_executable(skintokens-generation-parity
-  tools/generation_parity.cpp src/backend.cpp src/qwen.cpp src/weights.cpp)
+  tools/generation_parity.cpp src/backend.cpp src/qwen.cpp src/weights.cpp src/file_source.cpp)
 target_include_directories(skintokens-generation-parity PRIVATE src include)
 target_link_libraries(skintokens-generation-parity PRIVATE ggml Threads::Threads)
 set_target_properties(skintokens-generation-parity PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
@@ -197,25 +198,25 @@ target_link_libraries(skintokens-animation-parity PRIVATE skintokens::skintokens
 set_target_properties(skintokens-animation-parity PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 add_executable(skintokens-full-binding-parity
-  tools/full_binding_parity.cpp src/backend.cpp src/binding.cpp src/skinning.cpp src/skin_vae.cpp src/weights.cpp)
+  tools/full_binding_parity.cpp src/backend.cpp src/binding.cpp src/skinning.cpp src/skin_vae.cpp src/weights.cpp src/file_source.cpp)
 target_include_directories(skintokens-full-binding-parity PRIVATE src include)
 target_link_libraries(skintokens-full-binding-parity PRIVATE ggml Threads::Threads nlohmann_json::nlohmann_json)
 set_target_properties(skintokens-full-binding-parity PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 add_executable(skintokens-giraffe-parity
-  tools/giraffe_parity.cpp src/backend.cpp src/binding.cpp src/skin_vae.cpp src/weights.cpp)
+  tools/giraffe_parity.cpp src/backend.cpp src/binding.cpp src/skin_vae.cpp src/weights.cpp src/file_source.cpp)
 target_include_directories(skintokens-giraffe-parity PRIVATE src include)
 target_link_libraries(skintokens-giraffe-parity PRIVATE ggml Threads::Threads nlohmann_json::nlohmann_json)
 set_target_properties(skintokens-giraffe-parity PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 add_executable(skintokens-logits-dump
-  tools/logits_dump.cpp src/backend.cpp src/qwen.cpp src/weights.cpp)
+  tools/logits_dump.cpp src/backend.cpp src/qwen.cpp src/weights.cpp src/file_source.cpp)
 target_include_directories(skintokens-logits-dump PRIVATE src include)
 target_link_libraries(skintokens-logits-dump PRIVATE ggml Threads::Threads)
 set_target_properties(skintokens-logits-dump PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 add_executable(skintokens-qwen-batch-parity
-  tools/qwen_batch_parity.cpp src/backend.cpp src/qwen.cpp src/weights.cpp)
+  tools/qwen_batch_parity.cpp src/backend.cpp src/qwen.cpp src/weights.cpp src/file_source.cpp)
 target_include_directories(skintokens-qwen-batch-parity PRIVATE src include)
 target_link_libraries(skintokens-qwen-batch-parity PRIVATE ggml Threads::Threads)
 set_target_properties(skintokens-qwen-batch-parity PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")

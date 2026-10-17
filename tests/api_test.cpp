@@ -407,6 +407,27 @@ int main() {
     assert(saved);
     auto loaded = skintokens::load_glb_file(output);
     assert(loaded && loaded->vertices.size() == 3U && loaded->faces.size() == 1U && loaded->colors.size() == 3U);
+    // The memory writer and reader are the file ones minus the file: same bytes, same mesh, and a
+    // damaged header is refused.
+    auto in_memory = skintokens::save_skinned_animation_glb_memory(geometry, binding, animation);
+    assert(in_memory);
+    {
+        std::ifstream written(output, std::ios::binary);
+        const std::vector<char> on_disk{std::istreambuf_iterator<char>(written), {}};
+        assert(on_disk.size() == in_memory->size() &&
+               std::memcmp(on_disk.data(), in_memory->data(), on_disk.size()) == 0);
+    }
+    auto from_memory = skintokens::load_glb_memory(*in_memory);
+    assert(from_memory && from_memory->vertices.size() == loaded->vertices.size() &&
+           from_memory->faces == loaded->faces);
+    auto damaged = *in_memory;
+    damaged[0] = std::byte{0};
+    assert(!skintokens::load_glb_memory(damaged));
+    skintokens::runtime_options nothing_there;
+    nothing_there.files.read = [](const std::filesystem::path &, std::uint64_t, std::span<std::byte>) {
+        return std::size_t{0};
+    };
+    assert(!skintokens::model::load("not-a-directory", nothing_there));
     auto loaded_motion = skintokens::load_kimodo_glb_file(output);
     assert(loaded_motion && loaded_motion->rig.names.size() == binding.rig.names.size());
     assert(loaded_motion->rig.parents == binding.rig.parents);

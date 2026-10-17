@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <expected>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <span>
 #include <string>
@@ -24,6 +25,9 @@
 #else
 #  define SKINTOKENS_API
 #endif
+
+struct ggml_tensor;
+struct ggml_backend_device;
 
 namespace skintokens {
 
@@ -205,10 +209,26 @@ struct skinned_asset {
 
 enum class device_kind : std::uint8_t { automatic, cpu, vulkan };
 
+// Where model files come from when the process cannot open them itself (a
+// sandboxed guest). Empty members fall back to the file system.
+struct file_source {
+    // Copy the bytes at `offset` of `path` into `output`; returns how many it
+    // copied, fewer than output.size() only at the end of the file.
+    std::function<std::size_t(const std::filesystem::path & path, std::uint64_t offset,
+                              std::span<std::byte> output)> read;
+    // Optional: put a weight tensor's bytes, stored at `offset` of `path`,
+    // straight into its backend buffer.
+    std::function<bool(ggml_tensor * tensor, const std::filesystem::path & path,
+                       std::uint64_t offset)> load_tensor;
+};
+
 struct runtime_options {
     device_kind device = device_kind::automatic;
     std::uint32_t threads = 0;
     std::filesystem::path backend_directory;
+    file_source files;
+    // A device the caller registered; skips backend discovery when set.
+    ggml_backend_device * device_handle = nullptr;
 };
 
 struct generation_options {
@@ -259,6 +279,9 @@ private:
 
 [[nodiscard]] SKINTOKENS_API result<mesh> load_glb_file(
     const std::filesystem::path & path);
+
+[[nodiscard]] SKINTOKENS_API result<mesh> load_glb_memory(
+    std::span<const std::byte> bytes);
 
 // Reads trellis2cpp's versioned persisted mesh format directly. Coordinates
 // and PBR vertex colours are converted exactly as its portable GLB exporter.
@@ -369,6 +392,11 @@ compare_soma30_to_generated(
 
 [[nodiscard]] SKINTOKENS_API result<void> save_skinned_animation_glb_file(
     const std::filesystem::path & path,
+    const mesh & geometry,
+    const skin & binding,
+    const motion & animation);
+
+[[nodiscard]] SKINTOKENS_API result<std::vector<std::byte>> save_skinned_animation_glb_memory(
     const mesh & geometry,
     const skin & binding,
     const motion & animation);

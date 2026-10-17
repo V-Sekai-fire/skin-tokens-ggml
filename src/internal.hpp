@@ -20,7 +20,9 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <istream>
 #include <limits>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -111,10 +113,14 @@ struct weight_component {
 };
 
 [[nodiscard]] result<std::unique_ptr<weight_component>> load_component(
-    const std::filesystem::path & path, ggml_backend_t backend);
+    const std::filesystem::path & path, ggml_backend_t backend, const file_source & files = {});
 
 [[nodiscard]] result<bundle_metadata> inspect_gguf(
-    const std::filesystem::path & path);
+    const std::filesystem::path & path, const file_source & files = {});
+
+// An istream over a file, or over file_source::read when it is set.
+[[nodiscard]] std::unique_ptr<std::istream> open_source(
+    const std::filesystem::path & path, const file_source & files);
 
 using tensor_snapshot = std::unordered_map<std::string, std::vector<float>>;
 

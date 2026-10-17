@@ -799,12 +799,12 @@ model::~model() = default;
 
 result<model> model::load(const std::filesystem::path & bundle, const runtime_options & options) {
     detail::profile_scope total_profile{"model.load.total"};
-    if (!std::filesystem::is_directory(bundle))
+    if (!options.files.read && !std::filesystem::is_directory(bundle))
         return std::unexpected(detail::fail(error_code::io, "model bundle must be a directory"));
     auto output = std::make_unique<impl>();
-    auto mesh_encoder = detail::inspect_gguf(bundle / "mesh-encoder.gguf");
-    auto tokenrig = detail::inspect_gguf(bundle / "tokenrig.gguf");
-    auto skin_vae = detail::inspect_gguf(bundle / "skin-vae.gguf");
+    auto mesh_encoder = detail::inspect_gguf(bundle / "mesh-encoder.gguf", options.files);
+    auto tokenrig = detail::inspect_gguf(bundle / "tokenrig.gguf", options.files);
+    auto skin_vae = detail::inspect_gguf(bundle / "skin-vae.gguf", options.files);
     if (!mesh_encoder) return std::unexpected(mesh_encoder.error());
     if (!tokenrig) return std::unexpected(tokenrig.error());
     if (!skin_vae) return std::unexpected(skin_vae.error());
@@ -819,11 +819,11 @@ result<model> model::load(const std::filesystem::path & bundle, const runtime_op
         return std::unexpected(detail::fail(error_code::incompatible_model, "model components have mismatched source identities"));
     auto backend = detail::make_backend(options);
     if (!backend) return std::unexpected(backend.error());
-    auto mesh_weights = detail::load_component(bundle / "mesh-encoder.gguf", (*backend)->value);
+    auto mesh_weights = detail::load_component(bundle / "mesh-encoder.gguf", (*backend)->value, options.files);
     if (!mesh_weights) return std::unexpected(mesh_weights.error());
-    auto tokenrig_weights = detail::load_component(bundle / "tokenrig.gguf", (*backend)->value);
+    auto tokenrig_weights = detail::load_component(bundle / "tokenrig.gguf", (*backend)->value, options.files);
     if (!tokenrig_weights) return std::unexpected(tokenrig_weights.error());
-    auto skin_vae_weights = detail::load_component(bundle / "skin-vae.gguf", (*backend)->value);
+    auto skin_vae_weights = detail::load_component(bundle / "skin-vae.gguf", (*backend)->value, options.files);
     if (!skin_vae_weights) return std::unexpected(skin_vae_weights.error());
     output->mesh_encoder = std::move(*mesh_encoder);
     output->tokenrig = std::move(*tokenrig);
