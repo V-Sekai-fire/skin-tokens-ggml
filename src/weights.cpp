@@ -34,7 +34,8 @@ result<std::unique_ptr<weight_component>> load_component(
     for (std::int64_t i = 0; i < gguf_get_n_tensors(output->file); ++i) {
         const char * name = gguf_get_tensor_name(output->file, i);
         auto * tensor = ggml_get_tensor(output->context, name);
-        if (tensor == nullptr || (tensor->type != GGML_TYPE_F32 && tensor->type != GGML_TYPE_F16))
+        if (tensor == nullptr || (tensor->type != GGML_TYPE_F32 && tensor->type != GGML_TYPE_F16 &&
+                                  tensor->type != GGML_TYPE_BF16))
             return std::unexpected(fail(error_code::incompatible_model, "GGUF component has unsupported tensor type"));
         const std::size_t bytes = ggml_nbytes(tensor);
         const std::size_t offset = gguf_get_tensor_offset(output->file, i);

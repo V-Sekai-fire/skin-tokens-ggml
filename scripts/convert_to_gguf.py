@@ -25,6 +25,7 @@ GGUF_VERSION = 3
 ALIGNMENT = 32
 F32 = 0
 F16 = 1
+BF16 = 30
 UINT32 = 4
 STRING = 8
 
@@ -99,7 +100,8 @@ def choose_type(name: str, shape: tuple[int, ...], ftype: int) -> int:
     if ftype == 0:
         return F32
     sensitive = any(part in name for part in ("norm", "embed", "query", "q_vec", "FSQ"))
-    return F16 if len(shape) >= 2 and not sensitive else F32
+    matrix = F16 if ftype == 1 else BF16
+    return matrix if len(shape) >= 2 and not sensitive else F32
 
 
 @dataclass
@@ -113,6 +115,10 @@ class Tensor:
     @property
     def data(self) -> bytes:
         import torch
+        if self.kind == BF16:
+            if self.value.dtype != torch.bfloat16:
+                raise ValueError(f"{self.name} is {self.value.dtype}; BF16 output keeps BF16 sources only")
+            return self.value.contiguous().view(torch.int16).numpy().tobytes(order="C")
         dtype = torch.float32 if self.kind == F32 else torch.float16
         return self.value.to(dtype=dtype).contiguous().numpy().tobytes(order="C")
 
@@ -152,7 +158,7 @@ def write_component(path: Path, component: str, values: list[tuple[str, object]]
         kv_string("general.architecture", "skintokens"),
         kv_string("general.name", "SkinTokens TokenRig"),
         kv_u32("general.alignment", ALIGNMENT),
-        kv_u32("general.file_type", ftype),
+        kv_u32("general.file_type", {0: 0, 1: 1, 2: 32}[ftype]),
         kv_u32("skintokens.format_version", 1),
         kv_string("skintokens.component", component),
         kv_string("skintokens.upstream_revision", UPSTREAM_REVISION),
@@ -198,7 +204,8 @@ def main() -> None:
     parser.add_argument("--config", type=Path, required=True,
                         help="JSON emitted by the trusted extractor")
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--ftype", type=int, choices=(0, 1), default=1)
+    parser.add_argument("--ftype", type=int, choices=(0, 1, 2), default=1,
+                        help="0 F32, 1 F16, 2 BF16 matrices as stored in the checkpoint")
     args = parser.parse_args()
 
     config = json.loads(args.config.read_text(encoding="utf-8"))
