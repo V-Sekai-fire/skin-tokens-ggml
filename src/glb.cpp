@@ -1295,6 +1295,15 @@ vec3 unit(vec3 v, vec3 fallback) {
     return length > 1e-12F ? vec3{v.x/length, v.y/length, v.z/length} : fallback;
 }
 bool is_identity(const matrix4 & m) { return m == identity_matrix(); }
+json vec3_bounds(std::span<const vec3> values) {
+    vec3 low{0.0F, 0.0F, 0.0F}, high{0.0F, 0.0F, 0.0F};
+    if (!values.empty()) low = high = values.front();
+    for (const auto & v : values) {
+        low = {std::min(low.x, v.x), std::min(low.y, v.y), std::min(low.z, v.z)};
+        high = {std::max(high.x, v.x), std::max(high.y, v.y), std::max(high.z, v.z)};
+    }
+    return {{"min", json::array({low.x, low.y, low.z})}, {"max", json::array({high.x, high.y, high.z})}};
+}
 
 // The rows of the transform's cofactor matrix: cofactor * n is the normal transform up to scale.
 struct normal_transform {
@@ -1576,8 +1585,10 @@ result<std::vector<std::byte>> save_rigged_source_glb_memory(
                             }
                             const auto packed = builder.accessor_for<vec3>(moved_values, 5126U, "VEC3");
                             json accessor_value = source_accessor;
-                            accessor_value.erase("min");
-                            accessor_value.erase("max");
+                            // The dense values are the moved deltas plus zeros where nothing moves.
+                            std::vector<vec3> with_zero = moved_values;
+                            with_zero.push_back({0.0F, 0.0F, 0.0F});
+                            accessor_value.update(vec3_bounds(with_zero));
                             accessor_value["sparse"]["values"] = {{"bufferView", root["accessors"][packed]["bufferView"]}};
                             target[name] = root["accessors"].size();
                             root["accessors"].push_back(std::move(accessor_value));
@@ -1586,7 +1597,8 @@ result<std::vector<std::byte>> save_rigged_source_glb_memory(
                         auto values = read_vec3(*doc, target[name]);
                         if (!values) return std::unexpected(values.error());
                         for (auto & v : *values) v = move(v);
-                        target[name] = builder.accessor_for<vec3>(*values, 5126U, "VEC3", 34962U);
+                        target[name] = builder.accessor_for<vec3>(*values, 5126U, "VEC3", 34962U,
+                            std::string_view{name} == "POSITION" ? vec3_bounds(*values) : json{});
                     }
                 }
             }
@@ -1687,10 +1699,22 @@ result<std::vector<std::byte>> save_rigged_source_glb_memory(
     root["animations"] = json::array({{{"name", animation_name(animation)},
         {"samplers", std::move(samplers)}, {"channels", std::move(channels)}}});
 
+    // Godot treats a scene with one root differently from one with several: when the source has a
+    // single root, the skeleton and skinned meshes go inside it, so importers keep that root.
+    // Only a root without a transform can hold them: the joints and vertices are in world space.
     json & scene = root["scenes"][scene_index];
     if (!scene.contains("nodes")) scene["nodes"] = json::array();
-    scene["nodes"].push_back(joint_base);
-    for (auto index : placed) scene["nodes"].push_back(index);
+    json * holder = &scene["nodes"];
+    if (scene["nodes"].size() == 1U && scene["nodes"][0].is_number_unsigned()) {
+        json & single = root["nodes"][scene["nodes"][0].get<std::size_t>()];
+        auto local = node_matrix(single);
+        if (local && is_identity(*local) && !single.contains("mesh") && !single.contains("skin")) {
+            if (!single.contains("children")) single["children"] = json::array();
+            holder = &single["children"];
+        }
+    }
+    holder->push_back(joint_base);
+    for (auto index : placed) holder->push_back(index);
     drop_unused_bytes(builder);
     align4(builder.binary);
     root["buffers"][0]["byteLength"] = builder.binary.size();
