@@ -12,7 +12,7 @@ void usage() {
     std::cerr << "usage:\n"
               << "  skintokens-cli inspect MODEL_DIR [--device auto|cpu|vulkan]\n"
               << "  skintokens-cli rig MODEL_DIR MESH.{glb,t2mesh} OUTPUT.glb"
-                 " [--device auto|cpu|vulkan] [--postprocess]"
+                 " [--device auto|cpu|vulkan] [--postprocess] [--no-robust-transfer]"
                  " [--beams N] [--temperature F] [--max-tokens N]\n"
               << "  skintokens-cli skin MODEL_DIR MESH.{glb,t2mesh} SKELETON.glb OUTPUT.glb"
                  " [--device auto|cpu|vulkan] [--fit none|global|articulated]"
@@ -212,6 +212,7 @@ int main(int argc, char ** argv) {
         else if (std::string_view{argv[i]} == "--no-fit") fit = skintokens::skeleton_fit::none;
         else if (std::string_view{argv[i]} == "--raw-learned") generation.surface_postprocess = false;
         else if (std::string_view{argv[i]} == "--postprocess") generation.surface_postprocess = true;
+        else if (std::string_view{argv[i]} == "--no-robust-transfer") generation.robust_transfer = false;
         else if (std::string_view{argv[i]} == "--beams") generation.beams = static_cast<std::uint32_t>(std::stoul(argv[++i]));
         else if (std::string_view{argv[i]} == "--temperature") generation.temperature = std::stof(argv[++i]);
         else if (std::string_view{argv[i]} == "--max-tokens") generation.max_tokens = std::stoul(argv[++i]);

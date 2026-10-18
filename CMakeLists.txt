@@ -198,6 +198,15 @@ add_executable(skintokens-animation-parity tools/animation_parity.cpp)
 target_link_libraries(skintokens-animation-parity PRIVATE skintokens::skintokens nlohmann_json::nlohmann_json)
 set_target_properties(skintokens-animation-parity PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
+add_executable(skintokens-skin-stress tools/skin_stress.cpp)
+target_link_libraries(skintokens-skin-stress PRIVATE skintokens::skintokens)
+set_target_properties(skintokens-skin-stress PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
+add_executable(skintokens-transfer-replay tools/transfer_replay.cpp src/binding.cpp)
+target_include_directories(skintokens-transfer-replay PRIVATE src include)
+target_link_libraries(skintokens-transfer-replay PRIVATE skintokens::skintokens)
+set_target_properties(skintokens-transfer-replay PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
 add_executable(skintokens-full-binding-parity
   tools/full_binding_parity.cpp src/backend.cpp src/binding.cpp src/skinning.cpp src/skin_vae.cpp src/weights.cpp src/file_source.cpp src/attention.cpp)
 target_include_directories(skintokens-full-binding-parity PRIVATE src include)
