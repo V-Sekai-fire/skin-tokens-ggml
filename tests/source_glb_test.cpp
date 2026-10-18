@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -152,6 +153,34 @@ int main() {
     const json old_root = read_json(*old);
     CHECK(old_root["materials"].size() == 1U && !old_root.contains("textures"));
     CHECK(old_root["animations"][0]["name"] == "RESET");
+
+    // A rigged file with one primitive per material reads back as one binding, and a clip added
+    // to it keeps the materials and the RESET clip.
+    {
+        const auto path = std::filesystem::temp_directory_path() / "skintokens-source-glb-test.glb";
+        std::FILE * file = std::fopen(path.string().c_str(), "wb");
+        CHECK(file != nullptr);
+        std::fwrite(out->data(), 1, out->size(), file);
+        std::fclose(file);
+        auto asset = skintokens::load_skinned_glb_file(path);
+        std::filesystem::remove(path);
+        if (!asset) { std::fprintf(stderr, "reload: %s\n", asset.error().message.c_str()); return 1; }
+        CHECK(asset->binding.joints.size() == geometry->vertices.size());
+        CHECK(asset->binding.weights[0][0] > 0.74F && asset->binding.weights[0][0] < 0.76F);
+        skintokens::motion walk = rest;
+        walk.name = "walk";
+        walk.frames = 3U;
+        walk.root_translations.assign(3U, binding.rig.rest_positions.front());
+        walk.local_rotations.assign(3U * binding.rig.names.size(), {});
+        auto with_walk = skintokens::add_animation_glb_memory(*out, walk);
+        CHECK(with_walk);
+        const json walked = read_json(*with_walk);
+        CHECK(walked["animations"].size() == 2U && walked["animations"][0]["name"] == "walk");
+        CHECK(walked["animations"][1]["name"] == "RESET");
+        CHECK(walked["materials"].size() == 2U && walked["images"].size() == 1U);
+        walk.rig.names[1] = "NotInTheSkin";
+        CHECK(!skintokens::add_animation_glb_memory(*out, walk));
+    }
 
     // A binding for a different mesh is refused.
     auto short_binding = binding;
