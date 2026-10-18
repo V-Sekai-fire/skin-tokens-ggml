@@ -24,3 +24,7 @@ add_test(NAME skintokens-tokenizer-test COMMAND skintokens-tokenizer-test)
 add_executable(skintokens-source-glb-test source_glb_test.cpp)
 target_link_libraries(skintokens-source-glb-test PRIVATE skintokens::skintokens nlohmann_json::nlohmann_json)
 add_test(NAME skintokens-source-glb-test COMMAND skintokens-source-glb-test)
+
+add_executable(skintokens-vrm-pose-test vrm_pose_test.cpp)
+target_link_libraries(skintokens-vrm-pose-test PRIVATE skintokens::skintokens nlohmann_json::nlohmann_json)
+add_test(NAME skintokens-vrm-pose-test COMMAND skintokens-vrm-pose-test)
