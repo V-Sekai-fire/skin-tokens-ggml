@@ -32,6 +32,7 @@ void usage() {
                  " [--minimum-confidence F] [--map-fingers]\n"
               << "  skintokens-cli retarget-generated-check SOMA30.glb GENERATED.glb\n"
               << "  skintokens-cli add-motion RIGGED.glb CLIP_DIR loop|once SECONDS NAME OUTPUT.glb\n"
+              << "  skintokens-cli humanoid GENERATED.glb [--minimum-confidence F]\n"
               << "  skintokens-cli prepare-mixamo MESH.glb SOMA30.glb OUTPUT.glb\n"
               << "  skintokens-cli bind MODEL_DIR MESH.{glb,t2mesh} MOTION.glb OUTPUT.glb"
                  " [--device auto|cpu|vulkan] [--geometric|--supplied-skeleton]"
@@ -162,6 +163,33 @@ int main(int argc, char ** argv) {
                   << ",\"frameCount\":" << info->frame_count
                   << ",\"framesPerSecond\":" << info->frames_per_second
                   << ",\"rigKind\":\"" << rig << "\"}\n";
+        return 0;
+    }
+    if (std::string_view{argv[1]} == "humanoid") {
+        if (argc < 3) { usage(); return 2; }
+        skintokens::humanoid_match_options options;
+        if (argc == 5 && std::string_view{argv[3]} == "--minimum-confidence")
+            options.minimum_confidence = std::stof(argv[4]);
+        auto asset = skintokens::load_skinned_glb_file(argv[2]);
+        if (!asset) { std::cerr << asset.error().message << '\n'; return 1; }
+        auto mapping = skintokens::match_generated_humanoid(asset->binding.rig, options);
+        if (!mapping) { std::cout << "not humanoid: " << mapping.error().message << '\n'; return 3; }
+        static constexpr const char * names[] = {"unmapped", "hips", "spine1", "spine2", "chest",
+            "neck", "head", "left_shoulder", "left_upper_arm", "left_forearm", "left_hand",
+            "right_shoulder", "right_upper_arm", "right_forearm", "right_hand", "left_upper_leg",
+            "left_shin", "left_foot", "left_toe", "right_upper_leg", "right_shin", "right_foot",
+            "right_toe"};
+        const auto & rig = asset->binding.rig;
+        std::cout << std::fixed << std::setprecision(3) << "{\"confidence\":"
+                  << mapping->report.confidence << ",\"roles\":{";
+        bool first = true;
+        for (std::size_t j = 0; j < rig.names.size(); ++j) {
+            const auto role = static_cast<std::size_t>(mapping->generated_roles[j]);
+            if (role == 0) continue;
+            std::cout << (first ? "" : ",") << '"' << names[role] << "\":\"" << rig.names[j] << '"';
+            first = false;
+        }
+        std::cout << "}}\n";
         return 0;
     }
     if (std::string_view{argv[1]} == "retarget-generated") {
