@@ -245,6 +245,57 @@ int main() {
         }
     }
 
+    // A skinned mesh under a turned root (Sketchfab's Z-up to Y-up node) is placed by its joint,
+    // not by that node: glTF ignores a skinned mesh's node transform. The rig and the rigged file
+    // must keep the source's up and forward.
+    {
+        const float positions[] = {0,0,0, 1,0,0, 0,1,0};
+        const std::uint8_t joints[] = {0,0,0,0, 0,0,0,0, 0,0,0,0};
+        const float weights[] = {1,0,0,0, 1,0,0,0, 1,0,0,0};
+        const std::uint16_t indices[] = {0,1,2};
+        std::vector<std::byte> bin;
+        for (float v : positions) append(bin, v);   // 0..36
+        for (auto v : joints) append(bin, v);       // 36..48
+        for (float v : weights) append(bin, v);     // 48..96
+        for (auto v : indices) append(bin, v);      // 96..102
+        const std::string text = R"({"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[0,2]}],
+"nodes":[{"name":"Sketchfab_model","matrix":[1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1],"children":[1]},
+ {"name":"Body","mesh":0,"skin":0},{"name":"Bone"}],
+"skins":[{"joints":[2]}],
+"meshes":[{"primitives":[{"attributes":{"POSITION":0,"JOINTS_0":1,"WEIGHTS_0":2},"indices":3}]}],
+"accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3"},
+ {"bufferView":1,"componentType":5121,"count":3,"type":"VEC4"},
+ {"bufferView":2,"componentType":5126,"count":3,"type":"VEC4"},
+ {"bufferView":3,"componentType":5123,"count":3,"type":"SCALAR"}],
+"bufferViews":[{"buffer":0,"byteOffset":0,"byteLength":36},{"buffer":0,"byteOffset":36,"byteLength":12},
+ {"buffer":0,"byteOffset":48,"byteLength":48},{"buffer":0,"byteOffset":96,"byteLength":6}],
+"buffers":[{"byteLength":104}]})";
+        const auto turned = pack(text, bin);
+        auto placed = skintokens::load_glb_memory(turned);
+        if (!placed) { std::fprintf(stderr, "turned root: %s\n", placed.error().message.c_str()); return 1; }
+        CHECK(placed->vertices.size() == 3U);
+        const auto same = [](skintokens::vec3 a, float x, float y, float z) {
+            return std::abs(a.x - x) < 1e-6F && std::abs(a.y - y) < 1e-6F && std::abs(a.z - z) < 1e-6F;
+        };
+        // The vertex at +Y stays at +Y (the node matrix would move it to -Z).
+        CHECK(same(placed->vertices[2], 0, 1, 0) && same(placed->vertices[1], 1, 0, 0));
+        skintokens::skin one;
+        one.rig.names = {"Hips"};
+        one.rig.parents = {-1};
+        one.rig.rest_positions = {{0, 0, 0}};
+        one.joints.assign(3U, {0, 0, 0, 0});
+        one.weights.assign(3U, {1, 0, 0, 0});
+        skintokens::motion still;
+        still.frames = 1U;
+        still.rig = one.rig;
+        still.root_translations.assign(1U, one.rig.rest_positions.front());
+        still.local_rotations.assign(1U, {});
+        auto rigged = skintokens::save_rigged_source_glb_memory(turned, one, still);
+        if (!rigged) { std::fprintf(stderr, "turned writer: %s\n", rigged.error().message.c_str()); return 1; }
+        auto back = skintokens::load_glb_memory(*rigged);
+        CHECK(back && back->vertices.size() == 3U && same(back->vertices[2], 0, 1, 0));
+    }
+
     // A binding for a different mesh is refused.
     auto short_binding = binding;
     short_binding.joints.pop_back();
