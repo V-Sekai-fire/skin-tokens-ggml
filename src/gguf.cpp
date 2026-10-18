@@ -32,8 +32,9 @@ bool skip_scalar(std::istream & stream, std::uint32_t kind) {
 
 } // namespace
 
-result<bundle_metadata> inspect_gguf(const std::filesystem::path & path) {
-    std::ifstream stream(path, std::ios::binary);
+result<bundle_metadata> inspect_gguf(const std::filesystem::path & path, const file_source & files) {
+    auto source = open_source(path, files);
+    std::istream & stream = *source;
     if (!stream) return std::unexpected(fail(error_code::io, "cannot open GGUF component: " + path.string()));
     std::uint32_t magic = 0;
     std::uint32_t version = 0;

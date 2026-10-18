@@ -48,16 +48,9 @@ struct document {
     std::vector<std::byte> binary;
 };
 
-result<document> read_document(const std::filesystem::path & path) {
-    std::ifstream stream(path, std::ios::binary | std::ios::ate);
-    if (!stream) return std::unexpected(detail::fail(error_code::io, "cannot open GLB: " + path.string()));
-    const auto end = stream.tellg();
-    if (end < 0 || static_cast<std::uint64_t>(end) > max_file)
+result<document> parse_document(std::span<const std::byte> bytes) {
+    if (bytes.size() > max_file)
         return std::unexpected(detail::fail(error_code::limit_exceeded, "GLB exceeds 512 MiB safety limit"));
-    std::vector<std::byte> bytes(static_cast<std::size_t>(end));
-    stream.seekg(0);
-    if (!bytes.empty() && !stream.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(bytes.size())))
-        return std::unexpected(detail::fail(error_code::io, "failed to read GLB"));
     if (bytes.size() < 20U || u32(bytes, 0) != glb_magic || u32(bytes, 4) != 2U || u32(bytes, 8) != bytes.size())
         return std::unexpected(detail::fail(error_code::invalid_format, "invalid GLB v2 header"));
     const std::size_t json_size = u32(bytes, 12);
@@ -79,6 +72,19 @@ result<document> read_document(const std::filesystem::path & path) {
                              bytes.begin() + static_cast<std::ptrdiff_t>(next + 8U + binary_size));
     }
     return output;
+}
+
+result<document> read_document(const std::filesystem::path & path) {
+    std::ifstream stream(path, std::ios::binary | std::ios::ate);
+    if (!stream) return std::unexpected(detail::fail(error_code::io, "cannot open GLB: " + path.string()));
+    const auto end = stream.tellg();
+    if (end < 0 || static_cast<std::uint64_t>(end) > max_file)
+        return std::unexpected(detail::fail(error_code::limit_exceeded, "GLB exceeds 512 MiB safety limit"));
+    std::vector<std::byte> bytes(static_cast<std::size_t>(end));
+    stream.seekg(0);
+    if (!bytes.empty() && !stream.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(bytes.size())))
+        return std::unexpected(detail::fail(error_code::io, "failed to read GLB"));
+    return parse_document(bytes);
 }
 
 result<const json *> item(const json & root, std::string_view array, std::size_t index) {
@@ -435,8 +441,20 @@ result<void> validate_export(const mesh & geometry, const skin & binding, const 
 
 } // namespace
 
+namespace {
+result<mesh> load_glb_document(result<document> doc);
+} // namespace
+
 result<mesh> load_glb_file(const std::filesystem::path & path) {
-    auto doc = read_document(path);
+    return load_glb_document(read_document(path));
+}
+
+result<mesh> load_glb_memory(std::span<const std::byte> bytes) {
+    return load_glb_document(parse_document(bytes));
+}
+
+namespace {
+result<mesh> load_glb_document(result<document> doc) {
     if (!doc) return std::unexpected(doc.error());
     auto meshes = doc->root.find("meshes");
     if (meshes == doc->root.end() || !meshes->is_array())
@@ -607,6 +625,7 @@ result<mesh> load_glb_file(const std::filesystem::path & path) {
     }
     return output;
 }
+} // namespace
 
 result<mesh> load_trellis_mesh_file(const std::filesystem::path & path) {
     std::ifstream stream(path, std::ios::binary | std::ios::ate);
@@ -1107,9 +1126,8 @@ result<glb_info> inspect_glb_file(const std::filesystem::path & path) {
     return output;
 }
 
-result<void> save_skinned_animation_glb_file(
-    const std::filesystem::path & path, const mesh & geometry, const skin & binding,
-    const motion & animation) {
+result<std::vector<std::byte>> save_skinned_animation_glb_memory(
+    const mesh & geometry, const skin & binding, const motion & animation) {
     auto valid = validate_export(geometry, binding, animation);
     if (!valid) return std::unexpected(valid.error());
 
@@ -1214,16 +1232,32 @@ result<void> save_skinned_animation_glb_file(
     const std::uint64_t total64 = 12ULL + 8ULL + json_text.size() + 8ULL + builder.binary.size();
     if (total64 > std::numeric_limits<std::uint32_t>::max())
         return std::unexpected(detail::fail(error_code::limit_exceeded, "exported GLB exceeds 4 GiB"));
-    std::ofstream stream(path, std::ios::binary | std::ios::trunc);
-    if (!stream) return std::unexpected(detail::fail(error_code::io, "cannot create GLB: " + path.string()));
+    std::vector<std::byte> output;
+    output.reserve(static_cast<std::size_t>(total64));
+    const auto write = [&](const void * data, std::size_t bytes) {
+        const auto * begin = static_cast<const std::byte *>(data);
+        output.insert(output.end(), begin, begin + bytes);
+    };
     const auto write_u32 = [&](std::uint32_t value) {
-        stream.write(reinterpret_cast<const char *>(&value), sizeof(value));
+        if constexpr (std::endian::native == std::endian::big) value = std::byteswap(value);
+        write(&value, sizeof(value));
     };
     write_u32(glb_magic); write_u32(2U); write_u32(static_cast<std::uint32_t>(total64));
     write_u32(static_cast<std::uint32_t>(json_text.size())); write_u32(json_chunk);
-    stream.write(json_text.data(), static_cast<std::streamsize>(json_text.size()));
+    write(json_text.data(), json_text.size());
     write_u32(static_cast<std::uint32_t>(builder.binary.size())); write_u32(bin_chunk);
-    stream.write(reinterpret_cast<const char *>(builder.binary.data()), static_cast<std::streamsize>(builder.binary.size()));
+    write(builder.binary.data(), builder.binary.size());
+    return output;
+}
+
+result<void> save_skinned_animation_glb_file(
+    const std::filesystem::path & path, const mesh & geometry, const skin & binding,
+    const motion & animation) {
+    auto bytes = save_skinned_animation_glb_memory(geometry, binding, animation);
+    if (!bytes) return std::unexpected(bytes.error());
+    std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+    if (!stream) return std::unexpected(detail::fail(error_code::io, "cannot create GLB: " + path.string()));
+    stream.write(reinterpret_cast<const char *>(bytes->data()), static_cast<std::streamsize>(bytes->size()));
     if (!stream) return std::unexpected(detail::fail(error_code::io, "failed while writing GLB"));
     return {};
 }

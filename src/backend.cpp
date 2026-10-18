@@ -35,14 +35,11 @@ bool matches(device_kind wanted, ggml_backend_dev_t device) {
 } // namespace
 
 result<std::unique_ptr<backend_handle>> make_backend(const runtime_options & options) {
-    load_backends(options.backend_directory);
-    ggml_backend_dev_t selected = nullptr;
-    for (std::size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+    ggml_backend_dev_t selected = options.device_handle;
+    if (selected == nullptr) load_backends(options.backend_directory);
+    for (std::size_t i = 0; selected == nullptr && i < ggml_backend_dev_count(); ++i) {
         auto * candidate = ggml_backend_dev_get(i);
-        if (matches(options.device, candidate)) {
-            selected = candidate;
-            break;
-        }
+        if (matches(options.device, candidate)) selected = candidate;
     }
     if (selected == nullptr && options.device == device_kind::automatic) {
         for (std::size_t i = 0; i < ggml_backend_dev_count(); ++i) {

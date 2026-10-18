@@ -20,7 +20,10 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <functional>
+#include <istream>
 #include <limits>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -111,10 +114,25 @@ struct weight_component {
 };
 
 [[nodiscard]] result<std::unique_ptr<weight_component>> load_component(
-    const std::filesystem::path & path, ggml_backend_t backend);
+    const std::filesystem::path & path, ggml_backend_t backend, const file_source & files = {});
 
 [[nodiscard]] result<bundle_metadata> inspect_gguf(
-    const std::filesystem::path & path);
+    const std::filesystem::path & path, const file_source & files = {});
+
+// A [rows, data] slice of `weight`'s output rows, plus the matching bias slice when given.
+[[nodiscard]] ggml_tensor * rows_linear(ggml_context * context, ggml_tensor * weight, ggml_tensor * bias,
+                                        std::int64_t first_row, std::int64_t rows, ggml_tensor * input);
+
+// Multi-head attention one head at a time, queries in blocks, so no intermediate exceeds
+// 64 MiB. q is [heads * head_dim, queries]; head_kv(h) returns [2 * head_dim, data] (K rows,
+// then V rows). Returns [heads * head_dim, queries].
+[[nodiscard]] ggml_tensor * attend_by_head(ggml_context * context, ggml_tensor * q, std::int64_t heads,
+                                           std::int64_t head_dim, std::int64_t data_count,
+                                           const std::function<ggml_tensor *(std::int64_t head)> & head_kv);
+
+// An istream over a file, or over file_source::read when it is set.
+[[nodiscard]] std::unique_ptr<std::istream> open_source(
+    const std::filesystem::path & path, const file_source & files);
 
 using tensor_snapshot = std::unordered_map<std::string, std::vector<float>>;
 
