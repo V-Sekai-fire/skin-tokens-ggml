@@ -1,3 +1,4 @@
+#include <sstream>
 #include <skintokens/skintokens.hpp>
 
 #include <cstring>
@@ -30,6 +31,7 @@ void usage() {
               << "  skintokens-cli retarget-generated GENERATED.glb SOMA30.glb OUTPUT.glb"
                  " [--minimum-confidence F] [--map-fingers]\n"
               << "  skintokens-cli retarget-generated-check SOMA30.glb GENERATED.glb\n"
+              << "  skintokens-cli add-motion RIGGED.glb CLIP_DIR loop|once SECONDS NAME OUTPUT.glb\n"
               << "  skintokens-cli prepare-mixamo MESH.glb SOMA30.glb OUTPUT.glb\n"
               << "  skintokens-cli bind MODEL_DIR MESH.{glb,t2mesh} MOTION.glb OUTPUT.glb"
                  " [--device auto|cpu|vulkan] [--geometric|--supplied-skeleton]"
@@ -187,6 +189,58 @@ int main(int argc, char ** argv) {
                   << " core joints, " << report->ignored_terminal_joints
                   << " flexible hand joints\n";
         return 0;
+    }
+    if (std::string_view{argv[1]} == "add-motion") {
+        // add-motion RIGGED.glb CLIP_DIR loop|once SECONDS NAME OUTPUT.glb [--cut-only OUT.f32]
+        // CLIP_DIR holds motion.elf's transforms.f32 + skeleton.txt + parents.txt.
+        if (argc < 8) { usage(); return 2; }
+        const std::filesystem::path dir{argv[3]};
+        std::ifstream sk(dir / "skeleton.txt");
+        std::vector<std::string> lines;
+        for (std::string l; std::getline(sk, l);) lines.push_back(l);
+        if (lines.size() < 4) { std::cerr << "skeleton.txt is short\n"; return 1; }
+        std::istringstream head(lines[2]);
+        std::string word;
+        std::size_t frames = 0, joints = 0;
+        float fps = 30.0F;
+        while (head >> word) {
+            if (word == "frames") head >> frames;
+            else if (word == "fps") head >> fps;
+            else if (word == "joints") head >> joints;
+        }
+        std::vector<std::string> names(lines.begin() + 3, lines.begin() + 3 + static_cast<std::ptrdiff_t>(joints));
+        std::vector<std::int32_t> parents;
+        std::ifstream pf(dir / "parents.txt");
+        for (std::int32_t v; pf >> v;) parents.push_back(v);
+        std::ifstream tf(dir / "transforms.f32", std::ios::binary);
+        std::vector<float> xf(frames * joints * 12U);
+        tf.read(reinterpret_cast<char *>(xf.data()), static_cast<std::streamsize>(xf.size() * sizeof(float)));
+        if (!tf) { std::cerr << "transforms.f32 is short\n"; return 1; }
+        auto generated = skintokens::soma30_motion_from_transforms(names, parents, fps, xf);
+        if (!generated) { std::cerr << generated.error().message << '\n'; return 1; }
+        generated->name = argv[6];
+        const auto kind = std::string_view{argv[4]} == "once" ? skintokens::clip_cut::once : skintokens::clip_cut::loop;
+        auto cut = skintokens::cut_clip(*generated, kind, std::stof(argv[5]));
+        if (!cut) { std::cerr << cut.error().message << '\n'; return 1; }
+        const auto & r = cut->second;
+        std::cout << std::fixed << std::setprecision(3) << "cut " << argv[6] << ": start " << r.start
+                  << ", " << r.frames << " frames (" << static_cast<float>(r.frames) / fps << " s), seam "
+                  << r.seam_before_max_degrees << " -> " << r.seam_after_max_degrees << " deg, largest step "
+                  << r.largest_step_degrees << " deg, travel removed " << r.travel_removed_metres_per_second << " m/s\n";
+        std::ifstream rf(argv[2], std::ios::binary);
+        const std::vector<char> raw{std::istreambuf_iterator<char>(rf), {}};
+        skintokens::humanoid_match_options match_options;
+        skintokens::retarget_options transfer_options;
+        match_options.minimum_confidence = transfer_options.minimum_confidence = 0.5F;
+        auto added = skintokens::add_soma30_motion_glb_memory(
+            std::span<const std::byte>{reinterpret_cast<const std::byte *>(raw.data()), raw.size()},
+            cut->first, match_options, transfer_options);
+        if (!added) { std::cerr << added.error().message << '\n'; return 1; }
+        std::ofstream out(argv[7], std::ios::binary | std::ios::trunc);
+        out.write(reinterpret_cast<const char *>(added->first.data()), static_cast<std::streamsize>(added->first.size()));
+        std::cout << "added " << argv[6] << " to " << argv[7] << ": " << added->first.size()
+                  << " bytes, humanoid confidence " << added->second.confidence << '\n';
+        return out ? 0 : 1;
     }
     if (std::string_view{argv[1]} == "retarget-generated-check") {
         if (argc != 4) { usage(); return 2; }
