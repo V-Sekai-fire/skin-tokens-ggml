@@ -16,3 +16,7 @@ add_executable(skintokens-tokenizer-test tokenizer_test.cpp ../src/tokenizer.cpp
 target_include_directories(skintokens-tokenizer-test PRIVATE ../src ../include)
 target_link_libraries(skintokens-tokenizer-test PRIVATE ggml)
 add_test(NAME skintokens-tokenizer-test COMMAND skintokens-tokenizer-test)
+
+add_executable(skintokens-source-glb-test source_glb_test.cpp)
+target_link_libraries(skintokens-source-glb-test PRIVATE skintokens::skintokens nlohmann_json::nlohmann_json)
+add_test(NAME skintokens-source-glb-test COMMAND skintokens-source-glb-test)

@@ -2,6 +2,9 @@
 
 #include <iostream>
 #include <filesystem>
+#include <fstream>
+#include <span>
+#include <vector>
 #include <iomanip>
 #include <stdexcept>
 #include <string_view>
@@ -252,6 +255,21 @@ int main(int argc, char ** argv) {
         rest.rig = binding->rig;
         rest.root_translations.assign(1U, rest.rig.rest_positions.front());
         rest.local_rotations.assign(rest.rig.names.size(), {});
+        // A GLB source keeps its materials, textures and UVs; a T2MESH has none to keep.
+        if (mesh_path.extension() != ".t2mesh") {
+            std::ifstream stream(mesh_path, std::ios::binary);
+            const std::vector<char> raw{std::istreambuf_iterator<char>(stream), {}};
+            const std::span<const std::byte> source{reinterpret_cast<const std::byte *>(raw.data()), raw.size()};
+            auto bytes = skintokens::save_rigged_source_glb_memory(source, *binding, rest);
+            if (bytes) {
+                std::ofstream output(argv[4], std::ios::binary | std::ios::trunc);
+                output.write(reinterpret_cast<const char *>(bytes->data()), static_cast<std::streamsize>(bytes->size()));
+                if (!output) { std::cerr << "failed while writing " << argv[4] << '\n'; return 1; }
+                std::cout << "learned skeleton and skin weights written to " << argv[4] << '\n';
+                return 0;
+            }
+            std::cerr << "source GLB kept no materials: " << bytes.error().message << '\n';
+        }
         auto saved = skintokens::save_skinned_animation_glb_file(
             argv[4], *geometry, *binding, rest);
         if (!saved) { std::cerr << saved.error().message << '\n'; return 1; }
