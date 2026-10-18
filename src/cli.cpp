@@ -1,6 +1,8 @@
 #include <skintokens/skintokens.hpp>
 
+#include <cstring>
 #include <iostream>
+#include <iterator>
 #include <filesystem>
 #include <fstream>
 #include <span>
@@ -22,6 +24,8 @@ void usage() {
                  " [--retarget-soma-to-mixamo52]"
                  " [--postprocess] [--beams N] [--temperature F] [--max-tokens N]\n"
               << "  skintokens-cli glb-info FILE.glb\n"
+        "  skintokens-cli reframe IN.{glb,vrm} OUT.{glb,vrm}\n"
+        "  skintokens-cli t-pose IN.vrm OUT.vrm\n"
               << "  skintokens-cli retarget-check SOMA30.glb [MIXAMO52.glb]\n"
               << "  skintokens-cli retarget-generated GENERATED.glb SOMA30.glb OUTPUT.glb"
                  " [--minimum-confidence F] [--map-fingers]\n"
@@ -115,6 +119,32 @@ int main(int argc, char ** argv) {
         if (!saved) { std::cerr << saved.error().message << '\n'; return 1; }
         std::cout << "covered Mixamo52 comparison fixture written to " << argv[4] << '\n';
         return 0;
+    }
+    if (std::string_view{argv[1]} == "t-pose") {
+        if (argc != 4) { usage(); return 2; }
+        std::ifstream in(argv[2], std::ios::binary);
+        std::vector<char> raw((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        std::vector<std::byte> bytes(raw.size());
+        std::memcpy(bytes.data(), raw.data(), raw.size());
+        auto out = skintokens::pose_to_t_pose_glb_memory(bytes);
+        if (!out) { std::cerr << out.error().message << '\n'; return 1; }
+        std::ofstream file(argv[3], std::ios::binary | std::ios::trunc);
+        file.write(reinterpret_cast<const char *>(out->data()), static_cast<std::streamsize>(out->size()));
+        std::cout << "T-posed " << argv[2] << " -> " << argv[3] << ", " << out->size() << " bytes\n";
+        return file ? 0 : 1;
+    }
+    if (std::string_view{argv[1]} == "reframe") {
+        if (argc != 4) { usage(); return 2; }
+        std::ifstream in(argv[2], std::ios::binary);
+        std::vector<char> raw((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        std::vector<std::byte> bytes(raw.size());
+        std::memcpy(bytes.data(), raw.data(), raw.size());
+        auto out = skintokens::reframe_skin_joints_glb_memory(bytes);
+        if (!out) { std::cerr << out.error().message << '\n'; return 1; }
+        std::ofstream file(argv[3], std::ios::binary | std::ios::trunc);
+        file.write(reinterpret_cast<const char *>(out->data()), static_cast<std::streamsize>(out->size()));
+        std::cout << "re-framed " << argv[2] << " -> " << argv[3] << ", " << out->size() << " bytes\n";
+        return file ? 0 : 1;
     }
     if (std::string_view{argv[1]} == "glb-info") {
         if (argc != 3) { usage(); return 2; }
