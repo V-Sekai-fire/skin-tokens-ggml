@@ -12,6 +12,10 @@ add_executable(skintokens-binding-test binding_test.cpp ../src/binding.cpp)
 target_include_directories(skintokens-binding-test PRIVATE ../src ../include)
 add_test(NAME skintokens-binding-test COMMAND skintokens-binding-test)
 
+add_executable(skintokens-robust-transfer-test robust_transfer_test.cpp ../src/binding.cpp)
+target_include_directories(skintokens-robust-transfer-test PRIVATE ../src ../include)
+add_test(NAME skintokens-robust-transfer-test COMMAND skintokens-robust-transfer-test)
+
 add_executable(skintokens-tokenizer-test tokenizer_test.cpp ../src/tokenizer.cpp)
 target_include_directories(skintokens-tokenizer-test PRIVATE ../src ../include)
 target_link_libraries(skintokens-tokenizer-test PRIVATE ggml)
