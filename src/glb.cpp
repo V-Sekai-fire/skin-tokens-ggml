@@ -292,6 +292,68 @@ vec3 cross(vec3 left, vec3 right) {
 
 using matrix4 = std::array<float, 16>;
 
+quat q_mul(quat a, quat b) {
+    return {a.w*b.x + a.x*b.w + a.y*b.z - a.z*b.y, a.w*b.y - a.x*b.z + a.y*b.w + a.z*b.x,
+            a.w*b.z + a.x*b.y - a.y*b.x + a.z*b.w, a.w*b.w - a.x*b.x - a.y*b.y - a.z*b.z};
+}
+quat q_conj(quat a) { return {-a.x, -a.y, -a.z, a.w}; }
+quat q_norm(quat a) {
+    const float length = std::sqrt(a.x*a.x + a.y*a.y + a.z*a.z + a.w*a.w);
+    return length > 1e-12F ? quat{a.x/length, a.y/length, a.z/length, a.w/length} : quat{};
+}
+vec3 q_rotate(quat q, vec3 v) {
+    const quat r = q_mul(q_mul(q, {v.x, v.y, v.z, 0.0F}), q_conj(q));
+    return {r.x, r.y, r.z};
+}
+// A joint's rest in its parent's frame, given every joint's world rest rotation.
+quat rest_local_rotation(const skeleton & rig, const std::vector<quat> & frames, std::size_t joint) {
+    const std::int32_t parent = rig.parents[joint];
+    return parent < 0 ? frames[joint] : q_norm(q_mul(q_conj(frames[static_cast<std::size_t>(parent)]), frames[joint]));
+}
+vec3 rest_local_translation(const skeleton & rig, const std::vector<quat> & frames, std::size_t joint) {
+    const std::int32_t parent = rig.parents[joint];
+    if (parent < 0) return rig.rest_positions[joint];
+    const auto p = static_cast<std::size_t>(parent);
+    return q_rotate(q_conj(frames[p]), sub(rig.rest_positions[joint], rig.rest_positions[p]));
+}
+// A clip's local rotation (world-aligned rest frames) in the joint's own rest frames.
+quat framed_rotation(const skeleton & rig, const std::vector<quat> & frames, std::size_t joint, quat local) {
+    const std::int32_t parent = rig.parents[joint];
+    const quat parent_frame = parent < 0 ? quat{} : frames[static_cast<std::size_t>(parent)];
+    return q_norm(q_mul(q_mul(q_conj(parent_frame), local), frames[joint]));
+}
+std::array<float, 16> framed_inverse_bind(vec3 position, quat frame) {
+    const quat inverse = q_conj(frame);
+    const vec3 x = q_rotate(inverse, {1, 0, 0}), y = q_rotate(inverse, {0, 1, 0}), z = q_rotate(inverse, {0, 0, 1});
+    const vec3 t = q_rotate(inverse, {-position.x, -position.y, -position.z});
+    return {x.x, x.y, x.z, 0, y.x, y.y, y.z, 0, z.x, z.y, z.z, 0, t.x, t.y, t.z, 1};
+}
+// Rotation part of a column-major matrix, with any scale divided out.
+quat matrix_rotation(const std::array<float, 16> & m) {
+    vec3 c0{m[0], m[1], m[2]}, c1{m[4], m[5], m[6]}, c2{m[8], m[9], m[10]};
+    const auto len = [](vec3 v) { return std::sqrt(v.x*v.x + v.y*v.y + v.z*v.z); };
+    const float s0 = len(c0), s1 = len(c1), s2 = len(c2);
+    if (s0 < 1e-12F || s1 < 1e-12F || s2 < 1e-12F) return {};
+    const float a = c0.x/s0, b = c1.x/s1, c = c2.x/s2, d = c0.y/s0, e = c1.y/s1, f = c2.y/s2,
+                g = c0.z/s0, h = c1.z/s1, i = c2.z/s2;
+    quat q;
+    const float trace = a + e + i;
+    if (trace > 0.0F) {
+        const float t = std::sqrt(trace + 1.0F) * 2.0F;
+        q = {(h - f)/t, (c - g)/t, (d - b)/t, 0.25F*t};
+    } else if (a > e && a > i) {
+        const float t = std::sqrt(1.0F + a - e - i) * 2.0F;
+        q = {0.25F*t, (b + d)/t, (c + g)/t, (h - f)/t};
+    } else if (e > i) {
+        const float t = std::sqrt(1.0F + e - a - i) * 2.0F;
+        q = {(b + d)/t, 0.25F*t, (f + h)/t, (c - g)/t};
+    } else {
+        const float t = std::sqrt(1.0F + i - a - e) * 2.0F;
+        q = {(c + g)/t, (f + h)/t, 0.25F*t, (d - b)/t};
+    }
+    return q_norm(q);
+}
+
 matrix4 identity_matrix() {
     return {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
 }
@@ -917,6 +979,18 @@ result<motion> load_skeleton_document(const document & doc, bool require_animati
             return std::unexpected(detail::fail(error_code::invalid_format, "animation has no bounded keyframes"));
         return output;
     }
+    std::vector<quat> own_rest(joint_count), parent_rest(joint_count);
+    for (std::size_t joint = 0; joint < joint_count; ++joint) {
+        const std::size_t node_index = joint_nodes[joint];
+        auto transform = global_transform(node_index);
+        if (!transform) return std::unexpected(transform.error());
+        own_rest[joint] = matrix_rotation(*transform);
+        if (node_parents[node_index] >= 0) {
+            auto parent = global_transform(static_cast<std::size_t>(node_parents[node_index]));
+            if (!parent) return std::unexpected(parent.error());
+            parent_rest[joint] = matrix_rotation(*parent);
+        }
+    }
     output.frames = frames;
     output.frames_per_second = duration > 0.0F ? static_cast<float>(frames - 1U) / duration : 30.0F;
     output.root_translations.assign(frames, output.rig.rest_positions[0]);
@@ -930,7 +1004,10 @@ result<motion> load_skeleton_document(const document & doc, bool require_animati
             } else if (value.path == "rotation") {
                 auto rotation = quaternion(value.values, frame);
                 if (!rotation) return std::unexpected(rotation.error());
-                output.local_rotations[frame * joint_count + value.node] = *rotation;
+                // Stored relative to world-aligned rest frames: a joint with a turned rest reads
+                // identity at rest, as the rest of the library expects.
+                output.local_rotations[frame * joint_count + value.node] =
+                    q_norm(q_mul(q_mul(parent_rest[value.node], *rotation), q_conj(own_rest[value.node])));
             }
         }
     }
@@ -938,6 +1015,44 @@ result<motion> load_skeleton_document(const document & doc, bool require_animati
 }
 
 } // namespace
+
+std::vector<quat> joint_rest_frames(const skeleton & rig) {
+    // Each joint's up (+Y) runs along its bone, toward the child that best continues the
+    // parent's direction; the side axes turn as little as possible from the parent's.
+    const std::size_t count = rig.names.size();
+    std::vector<quat> frames(count);
+    const auto length = [](vec3 v) { return std::sqrt(v.x*v.x + v.y*v.y + v.z*v.z); };
+    const auto dot = [](vec3 a, vec3 b) { return a.x*b.x + a.y*b.y + a.z*b.z; };
+    for (std::size_t joint = 0; joint < count && joint < rig.parents.size() && joint < rig.rest_positions.size(); ++joint) {
+        const std::int32_t parent = rig.parents[joint];
+        const quat base = parent >= 0 && static_cast<std::size_t>(parent) < joint ? frames[static_cast<std::size_t>(parent)] : quat{};
+        const vec3 up = q_rotate(base, {0.0F, 1.0F, 0.0F});
+        vec3 best{};
+        float best_score = -2.0F;
+        for (std::size_t child = joint + 1U; child < count; ++child) {
+            if (rig.parents[child] != static_cast<std::int32_t>(joint)) continue;
+            const vec3 bone = sub(rig.rest_positions[child], rig.rest_positions[joint]);
+            const float bone_length = length(bone);
+            if (bone_length < 1e-6F) continue;
+            const vec3 direction{bone.x/bone_length, bone.y/bone_length, bone.z/bone_length};
+            const float score = dot(direction, up);
+            if (score > best_score) { best_score = score; best = direction; }
+        }
+        if (best_score < -1.5F) { frames[joint] = base; continue; }
+        quat turn;
+        const float cosine = std::clamp(dot(up, best), -1.0F, 1.0F);
+        if (cosine < -0.999999F) {
+            // Straight down from straight up: half a turn about the parent's forward axis.
+            const vec3 forward = q_rotate(base, {0.0F, 0.0F, 1.0F});
+            turn = {forward.x, forward.y, forward.z, 0.0F};
+        } else {
+            const vec3 axis = cross(up, best);
+            turn = q_norm({axis.x, axis.y, axis.z, 1.0F + cosine});
+        }
+        frames[joint] = q_norm(q_mul(turn, base));
+    }
+    return frames;
+}
 
 rig_kind identify_rig(const skeleton & value) {
     const auto has = [&](std::string_view wanted) {
@@ -1212,14 +1327,10 @@ result<std::vector<std::byte>> save_skinned_animation_glb_memory(
     for (const auto & face : geometry.faces) indices.insert(indices.end(), face.begin(), face.end());
     const auto index_accessor = builder.accessor_for<std::uint32_t>(indices, 5125U, "SCALAR", 34963U);
 
+    const std::vector<quat> frames = joint_rest_frames(binding.rig);
     std::vector<std::array<float, 16>> inverse_bind(joint_count);
-    for (std::size_t joint = 0; joint < joint_count; ++joint) {
-        auto & matrix = inverse_bind[joint];
-        matrix = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0,
-                  -binding.rig.rest_positions[joint].x,
-                  -binding.rig.rest_positions[joint].y,
-                  -binding.rig.rest_positions[joint].z, 1};
-    }
+    for (std::size_t joint = 0; joint < joint_count; ++joint)
+        inverse_bind[joint] = framed_inverse_bind(binding.rig.rest_positions[joint], frames[joint]);
     const auto inverse_accessor = builder.accessor_for<std::array<float, 16>>(inverse_bind, 5126U, "MAT4");
 
     std::vector<float> times(animation.frames);
@@ -1229,10 +1340,10 @@ result<std::vector<std::byte>> save_skinned_animation_glb_memory(
         json{{"min", {times.front()}}, {"max", {times.back()}}});
 
     for (std::size_t joint = 0; joint < joint_count; ++joint) {
-        const std::int32_t parent = binding.rig.parents[joint];
-        vec3 local = binding.rig.rest_positions[joint];
-        if (parent >= 0) local = sub(local, binding.rig.rest_positions[static_cast<std::size_t>(parent)]);
-        json node{{"name", binding.rig.names[joint]}, {"translation", {local.x, local.y, local.z}}};
+        const vec3 local = rest_local_translation(binding.rig, frames, joint);
+        const quat turn = rest_local_rotation(binding.rig, frames, joint);
+        json node{{"name", binding.rig.names[joint]}, {"translation", {local.x, local.y, local.z}},
+                  {"rotation", {turn.x, turn.y, turn.z, turn.w}}};
         json children = json::array();
         for (std::size_t child = 0; child < joint_count; ++child)
             if (binding.rig.parents[child] == static_cast<std::int32_t>(joint)) children.push_back(child);
@@ -1272,7 +1383,7 @@ result<std::vector<std::byte>> save_skinned_animation_glb_memory(
     for (std::size_t joint = 0; joint < joint_count; ++joint) {
         std::vector<quat> values(animation.frames);
         for (std::size_t frame = 0; frame < animation.frames; ++frame)
-            values[frame] = animation.local_rotations[frame * joint_count + joint];
+            values[frame] = framed_rotation(binding.rig, frames, joint, animation.local_rotations[frame * joint_count + joint]);
         const auto output_accessor = builder.accessor_for<quat>(values, 5126U, "VEC4");
         const auto sampler = samplers.size();
         samplers.push_back({{"input", time_accessor}, {"output", output_accessor}, {"interpolation", "LINEAR"}});
@@ -1652,11 +1763,12 @@ result<std::vector<std::byte>> save_rigged_source_glb_memory(
     if (base != geometry->vertices.size())
         return std::unexpected(detail::fail(error_code::invalid_format, "source walk does not match the loaded mesh"));
 
+    const std::vector<quat> frames = joint_rest_frames(binding.rig);
     for (std::size_t joint = 0; joint < joint_count; ++joint) {
-        const std::int32_t parent = binding.rig.parents[joint];
-        vec3 local = binding.rig.rest_positions[joint];
-        if (parent >= 0) local = sub(local, binding.rig.rest_positions[static_cast<std::size_t>(parent)]);
-        json node{{"name", binding.rig.names[joint]}, {"translation", {local.x, local.y, local.z}}};
+        const vec3 local = rest_local_translation(binding.rig, frames, joint);
+        const quat turn = rest_local_rotation(binding.rig, frames, joint);
+        json node{{"name", binding.rig.names[joint]}, {"translation", {local.x, local.y, local.z}},
+                  {"rotation", {turn.x, turn.y, turn.z, turn.w}}};
         json children = json::array();
         for (std::size_t child = 0; child < joint_count; ++child)
             if (binding.rig.parents[child] == static_cast<std::int32_t>(joint)) children.push_back(joint_base + child);
@@ -1668,9 +1780,7 @@ result<std::vector<std::byte>> save_rigged_source_glb_memory(
 
     std::vector<std::array<float, 16>> inverse_bind(joint_count);
     for (std::size_t joint = 0; joint < joint_count; ++joint)
-        inverse_bind[joint] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0,
-                               -binding.rig.rest_positions[joint].x, -binding.rig.rest_positions[joint].y,
-                               -binding.rig.rest_positions[joint].z, 1};
+        inverse_bind[joint] = framed_inverse_bind(binding.rig.rest_positions[joint], frames[joint]);
     json skin_object{{"name", binding.learned ? "SkinTokens learned binding" : "Geometric baseline binding"},
                      {"inverseBindMatrices", builder.accessor_for<std::array<float, 16>>(inverse_bind, 5126U, "MAT4")},
                      {"skeleton", joint_base}, {"joints", json::array()}};
@@ -1690,7 +1800,7 @@ result<std::vector<std::byte>> save_rigged_source_glb_memory(
     for (std::size_t joint = 0; joint < joint_count; ++joint) {
         std::vector<quat> values(animation.frames);
         for (std::size_t frame = 0; frame < animation.frames; ++frame)
-            values[frame] = animation.local_rotations[frame * joint_count + joint];
+            values[frame] = framed_rotation(binding.rig, frames, joint, animation.local_rotations[frame * joint_count + joint]);
         const auto sampler = samplers.size();
         samplers.push_back({{"input", time_accessor}, {"output", builder.accessor_for<quat>(values, 5126U, "VEC4")},
                             {"interpolation", "LINEAR"}});
@@ -1753,6 +1863,23 @@ result<std::vector<std::byte>> add_animation_glb_memory(
             return std::unexpected(detail::fail(error_code::invalid_argument, "clip joint is not in the skin: " + animation.rig.names[joint]));
         targets[joint] = found;
     }
+    // Each node's world rest rotation: the clip's rotations are turned into the joints' own frames.
+    std::vector<std::int32_t> node_parent(root["nodes"].size(), -1);
+    for (std::size_t node = 0; node < root["nodes"].size(); ++node)
+        for (const auto & child : root["nodes"][node].value("children", json::array()))
+            if (child.is_number_unsigned() && child.get<std::size_t>() < node_parent.size())
+                node_parent[child.get<std::size_t>()] = static_cast<std::int32_t>(node);
+    std::function<quat(std::int32_t, int)> world_rest = [&](std::int32_t node, int depth) -> quat {
+        if (node < 0 || depth > 4096) return quat{};
+        auto local = node_matrix(root["nodes"][static_cast<std::size_t>(node)]);
+        const quat own = local ? matrix_rotation(*local) : quat{};
+        return q_norm(q_mul(world_rest(node_parent[static_cast<std::size_t>(node)], depth + 1), own));
+    };
+    std::vector<quat> own_frame(joint_count), parent_frame(joint_count);
+    for (std::size_t joint = 0; joint < joint_count; ++joint) {
+        own_frame[joint] = world_rest(static_cast<std::int32_t>(targets[joint]), 0);
+        parent_frame[joint] = world_rest(node_parent[targets[joint]], 0);
+    }
     std::vector<float> times(animation.frames);
     const float fps = animation.frames_per_second > 0.0F ? animation.frames_per_second : 30.0F;
     for (std::size_t frame = 0; frame < animation.frames; ++frame) times[frame] = static_cast<float>(frame) / fps;
@@ -1766,7 +1893,8 @@ result<std::vector<std::byte>> add_animation_glb_memory(
     for (std::size_t joint = 0; joint < joint_count; ++joint) {
         std::vector<quat> values(animation.frames);
         for (std::size_t frame = 0; frame < animation.frames; ++frame)
-            values[frame] = animation.local_rotations[frame * joint_count + joint];
+            values[frame] = q_norm(q_mul(q_mul(q_conj(parent_frame[joint]),
+                animation.local_rotations[frame * joint_count + joint]), own_frame[joint]));
         const auto sampler = samplers.size();
         samplers.push_back({{"input", time_accessor}, {"output", builder.accessor_for<quat>(values, 5126U, "VEC4")},
                             {"interpolation", "LINEAR"}});

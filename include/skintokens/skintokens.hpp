@@ -308,6 +308,9 @@ private:
 [[nodiscard]] SKINTOKENS_API result<glb_info> inspect_glb_file(
     const std::filesystem::path & path);
 
+// World rest rotation of each joint: its +Y runs along its bone (glTF and RCSF joint
+// orientation). Writers bake these into the rest pose; deformation does not change.
+[[nodiscard]] SKINTOKENS_API std::vector<quat> joint_rest_frames(const skeleton & rig);
 [[nodiscard]] SKINTOKENS_API rig_kind identify_rig(const skeleton & value);
 
 // Uniformly fits a motion rig to the mesh's vertical extent and centre while

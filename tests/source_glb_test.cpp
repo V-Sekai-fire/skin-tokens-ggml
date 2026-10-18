@@ -182,6 +182,69 @@ int main() {
         CHECK(!skintokens::add_animation_glb_memory(*out, walk));
     }
 
+    // Joint frames: each joint's +Y runs along its bone, the deformation at rest is unchanged
+    // (joint world matrix times inverse bind is the identity), and a clip reads back as written.
+    {
+        skintokens::skin body;
+        body.rig.names = {"Hips", "Spine", "Head", "LeftUpLeg", "LeftLeg", "LeftFoot", "LeftToe", "LeftArm", "LeftHand"};
+        body.rig.parents = {-1, 0, 1, 0, 3, 4, 5, 1, 7};
+        body.rig.rest_positions = {{0, 1, 0}, {0, 1.2F, 0}, {0, 1.6F, 0}, {0.1F, 0.9F, 0}, {0.1F, 0.5F, 0},
+                                   {0.1F, 0.1F, 0}, {0.1F, 0, 0.15F}, {0.2F, 1.5F, 0}, {0.6F, 1.5F, 0}};
+        const auto frames = skintokens::joint_rest_frames(body.rig);
+        CHECK(frames.size() == 9U);
+        const auto turn = [](skintokens::quat q, skintokens::vec3 v) {
+            const float tx = 2*(q.y*v.z - q.z*v.y), ty = 2*(q.z*v.x - q.x*v.z), tz = 2*(q.x*v.y - q.y*v.x);
+            return skintokens::vec3{v.x + q.w*tx + (q.y*tz - q.z*ty), v.y + q.w*ty + (q.z*tx - q.x*tz),
+                                    v.z + q.w*tz + (q.x*ty - q.y*tx)};
+        };
+        const auto along = [&](std::size_t joint, std::size_t child) {
+            const auto & a = body.rig.rest_positions[joint];
+            const auto & c = body.rig.rest_positions[child];
+            const float dx = c.x - a.x, dy = c.y - a.y, dz = c.z - a.z, l = std::sqrt(dx*dx + dy*dy + dz*dz);
+            const auto y = turn(frames[joint], {0, 1, 0});
+            return (y.x*dx + y.y*dy + y.z*dz) / l > 0.9999F;
+        };
+        CHECK(along(0, 1) && along(1, 2) && along(3, 4) && along(4, 5) && along(5, 6) && along(7, 8));
+        const auto leg_forward = turn(frames[3], {0, 0, 1});
+        CHECK(leg_forward.z > 0.9999F);  // a leg turns down about the forward axis: forward stays +Z
+        body.joints.assign(geometry->vertices.size(), {0, 0, 0, 0});
+        body.weights.assign(geometry->vertices.size(), {1, 0, 0, 0});
+        for (std::size_t v = 0; v < geometry->vertices.size(); ++v) body.joints[v][0] = static_cast<std::uint16_t>(v % 9U);
+        skintokens::motion clip;
+        clip.name = "wave";
+        clip.frames = 2U;
+        clip.rig = body.rig;
+        clip.root_translations.assign(2U, body.rig.rest_positions[0]);
+        clip.local_rotations.assign(2U * 9U, {});
+        for (std::size_t j = 0; j < 9U; ++j) {
+            const float a = 0.1F + 0.07F * static_cast<float>(j);
+            clip.local_rotations[9U + j] = {std::sin(a) * 0.6F, std::sin(a) * 0.64F, std::sin(a) * 0.48F, std::cos(a)};
+        }
+        auto written = skintokens::save_rigged_source_glb_memory(source, body, clip);
+        CHECK(written);
+        const json framed = read_json(*written);
+        CHECK(framed["nodes"][framed["skins"][0]["joints"][3].get<std::size_t>()].contains("rotation"));
+        const auto path = std::filesystem::temp_directory_path() / "skintokens-joint-frames-test.glb";
+        std::FILE * file = std::fopen(path.string().c_str(), "wb");
+        CHECK(file != nullptr);
+        std::fwrite(written->data(), 1, written->size(), file);
+        std::fclose(file);
+        auto back = skintokens::load_kimodo_glb_file(path);
+        std::filesystem::remove(path);
+        CHECK(back && back->frames == 2U && back->rig.names.size() == 9U);
+        for (std::size_t j = 0; j < 9U; ++j) {
+            const auto & p = back->rig.rest_positions[j];
+            const auto & q = body.rig.rest_positions[j];
+            CHECK(std::abs(p.x - q.x) < 1e-5F && std::abs(p.y - q.y) < 1e-5F && std::abs(p.z - q.z) < 1e-5F);
+            for (std::size_t f = 0; f < 2U; ++f) {
+                const auto & r = back->local_rotations[f * 9U + j];
+                const auto & w = clip.local_rotations[f * 9U + j];
+                const float d = std::abs(r.x*w.x + r.y*w.y + r.z*w.z + r.w*w.w);
+                if (d < 0.99999F) { std::fprintf(stderr, "joint %zu frame %zu reads back %.6f\n", j, f, d); return 1; }
+            }
+        }
+    }
+
     // A binding for a different mesh is refused.
     auto short_binding = binding;
     short_binding.joints.pop_back();
