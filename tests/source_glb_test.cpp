@@ -121,7 +121,7 @@ int main() {
     CHECK(skinned == 2U);
     CHECK(!root["nodes"][0].contains("mesh") && !root["nodes"][1].contains("mesh"));
     CHECK(root["nodes"][2]["mesh"] == 1);  // the skipped primitive stays where it was
-    CHECK(root["animations"].size() == 1U && root["animations"][0]["name"] == "Rest pose");
+    CHECK(root["animations"].size() == 1U && root["animations"][0]["name"] == "RESET");
     CHECK(root["skins"][0]["joints"].size() == 2U);
 
     // Reading the result back gives the same world-space mesh the rig saw.
@@ -151,7 +151,7 @@ int main() {
     CHECK(old);
     const json old_root = read_json(*old);
     CHECK(old_root["materials"].size() == 1U && !old_root.contains("textures"));
-    CHECK(old_root["animations"][0]["name"] == "Rest pose");
+    CHECK(old_root["animations"][0]["name"] == "RESET");
 
     // A binding for a different mesh is refused.
     auto short_binding = binding;
