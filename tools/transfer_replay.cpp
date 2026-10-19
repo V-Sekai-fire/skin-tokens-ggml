@@ -15,6 +15,8 @@
 #include "binding.hpp"
 
 #include <chrono>
+#include <cmath>
+#include <utility>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -48,7 +50,7 @@ int main(int argc, char **argv) {
         else if (key == "--support") options.support_share = value;
         else if (key == "--reach") options.distance_fraction = value;
         else if (key == "--smooth") options.smooth_iterations = static_cast<std::size_t>(value);
-        else if (key == "--rigid") options.rigid_assemblies = value != 0.0F;
+        else if (key == "--rigid") options.rigid_parts = value != 0.0F;
         else {
             std::fprintf(stderr, "unknown option %s\n", argv[i - 1]);
             return 2;
@@ -74,6 +76,51 @@ int main(int argc, char **argv) {
             in.dense_joint_weights.size(), asset->binding.rig.names.size());
         return 1;
     }
+    // The trace keeps normalized vertices but not joints. The rig maps source
+    // positions to normalized ones by one affine map (axis change, centre,
+    // scale): fit it on the vertices by least squares and move the skeleton's
+    // rest positions with it.
+    std::vector<skintokens::vec3> normalized_joints;
+    {
+        double m[4][4] = {}, r[3][4] = {};
+        for (std::size_t i = 0; i < in.normalized_vertices.size(); ++i) {
+            const auto s = asset->geometry.vertices[i];
+            const auto d = in.normalized_vertices[i];
+            const double x[4] = {s.x, s.y, s.z, 1.0}, y[3] = {d.x, d.y, d.z};
+            for (int a = 0; a < 4; ++a) {
+                for (int b = 0; b < 4; ++b) m[a][b] += x[a] * x[b];
+                for (int k = 0; k < 3; ++k) r[k][a] += y[k] * x[a];
+            }
+        }
+        // Solve m * c_k = r_k for the three output rows (Gauss-Jordan).
+        double aug[4][7];
+        for (int a = 0; a < 4; ++a) {
+            for (int b = 0; b < 4; ++b) aug[a][b] = m[a][b];
+            for (int k = 0; k < 3; ++k) aug[a][4 + k] = r[k][a];
+        }
+        for (int c = 0; c < 4; ++c) {
+            int pivot = c;
+            for (int a = c + 1; a < 4; ++a)
+                if (std::abs(aug[a][c]) > std::abs(aug[pivot][c])) pivot = a;
+            for (int b = 0; b < 7; ++b) std::swap(aug[c][b], aug[pivot][b]);
+            const double d = aug[c][c];
+            if (std::abs(d) < 1e-30) break;
+            for (int b = 0; b < 7; ++b) aug[c][b] /= d;
+            for (int a = 0; a < 4; ++a) {
+                if (a == c) continue;
+                const double f = aug[a][c];
+                for (int b = 0; b < 7; ++b) aug[a][b] -= f * aug[c][b];
+            }
+        }
+        for (const auto p : asset->binding.rig.rest_positions) {
+            const double x[4] = {p.x, p.y, p.z, 1.0};
+            double y[3] = {};
+            for (int k = 0; k < 3; ++k)
+                for (int a = 0; a < 4; ++a) y[k] += aug[a][4 + k] * x[a];
+            normalized_joints.push_back({static_cast<float>(y[0]), static_cast<float>(y[1]), static_cast<float>(y[2])});
+        }
+    }
+    options.joints = normalized_joints;
     const auto start = std::chrono::steady_clock::now();
     auto result = raw_only ?
         skintokens::detail::integrate_learned_binding(asset->binding.rig, in.normalized_vertices,
