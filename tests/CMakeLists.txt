@@ -36,3 +36,7 @@ add_test(NAME skintokens-vrm-pose-test COMMAND skintokens-vrm-pose-test)
 add_executable(skintokens-motion-clip-test motion_clip_test.cpp)
 target_link_libraries(skintokens-motion-clip-test PRIVATE skintokens::skintokens)
 add_test(NAME skintokens-motion-clip-test COMMAND skintokens-motion-clip-test)
+
+add_executable(skintokens-non-indexed-glb-test non_indexed_glb_test.cpp)
+target_link_libraries(skintokens-non-indexed-glb-test PRIVATE skintokens::skintokens nlohmann_json::nlohmann_json)
+add_test(NAME skintokens-non-indexed-glb-test COMMAND skintokens-non-indexed-glb-test)

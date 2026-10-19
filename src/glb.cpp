@@ -534,9 +534,37 @@ struct mesh_instance {
     std::size_t node;
 };
 
+// A triangle primitive without indices is drawn non-indexed: vertices 3k, 3k+1, 3k+2 form triangle k.
 bool loaded_primitive(const json &primitive) {
-    return primitive.value("mode", 4U) == 4U && primitive.contains("attributes") && primitive.contains("indices") &&
+    return primitive.value("mode", 4U) == 4U && primitive.contains("attributes") &&
+        (!primitive.contains("indices") || primitive["indices"].is_number_unsigned()) &&
         primitive["attributes"].contains("POSITION") && primitive["attributes"]["POSITION"].is_number_unsigned();
+}
+
+// The primitive's triangle corners, in order, as indices into its POSITION accessor.
+result<std::vector<std::uint32_t>> primitive_corners(const document &doc, const json &primitive, std::size_t vertex_count) {
+    std::vector<std::uint32_t> corners;
+    if (!primitive.contains("indices")) {
+        if (vertex_count % 3U != 0U)
+            return std::unexpected(detail::fail(error_code::invalid_format,
+                "non-indexed triangle primitive POSITION count is not a multiple of 3"));
+        corners.resize(vertex_count);
+        for (std::size_t i = 0; i < vertex_count; ++i) corners[i] = static_cast<std::uint32_t>(i);
+        return corners;
+    }
+    result<accessor> indices = get_accessor(doc, primitive["indices"].get<std::size_t>());
+    if (!indices) return std::unexpected(indices.error());
+    if (indices->count % 3U != 0U)
+        return std::unexpected(detail::fail(error_code::limit_exceeded, "mesh primitive exceeds supported size"));
+    corners.resize(indices->count);
+    for (std::size_t i = 0; i < indices->count; ++i) {
+        result<std::uint32_t> value = index_value(*indices, i);
+        if (!value) return std::unexpected(value.error());
+        if (*value >= vertex_count)
+            return std::unexpected(detail::fail(error_code::invalid_format, "triangle index exceeds POSITION accessor"));
+        corners[i] = *value;
+    }
+    return corners;
 }
 
 result<std::vector<mesh_instance>> collect_mesh_instances(const document &doc, const json &meshes) {
@@ -675,10 +703,10 @@ result<mesh> load_glb_document(result<document> doc) {
             if (!loaded_primitive(primitive)) continue;
             const auto &attributes = primitive["attributes"];
             auto positions = get_accessor(*doc, attributes["POSITION"].get<std::size_t>());
-            auto indices = get_accessor(*doc, primitive["indices"].get<std::size_t>());
             if (!positions) return std::unexpected(positions.error());
-            if (!indices) return std::unexpected(indices.error());
-            if (indices->count % 3U != 0U || output.vertices.size() + positions->count > max_vertices)
+            result<std::vector<std::uint32_t>> corners = primitive_corners(*doc, primitive, positions->count);
+            if (!corners) return std::unexpected(corners.error());
+            if (output.vertices.size() + positions->count > max_vertices)
                 return std::unexpected(detail::fail(error_code::limit_exceeded, "mesh primitive exceeds supported size"));
             std::optional<accessor> colors;
             if (auto color_index = attributes.find("COLOR_0"); color_index != attributes.end()) {
@@ -731,22 +759,15 @@ result<mesh> load_glb_document(result<document> doc) {
                 output.colors.push_back(shade);
             }
             const bool mirrored = determinant3(instance.transform) < 0.0F;
-            for (std::size_t i = 0; i < indices->count; i += 3U) {
-                triangle face{};
-                for (std::size_t j = 0; j < 3U; ++j) {
-                    auto value = index_value(*indices, i + j);
-                    if (!value) return std::unexpected(value.error());
-                    if (*value >= positions->count)
-                        return std::unexpected(detail::fail(error_code::invalid_format, "triangle index exceeds POSITION accessor"));
-                    face[j] = base + *value;
-                }
+            for (std::size_t i = 0; i < corners->size(); i += 3U) {
+                triangle face{base + (*corners)[i], base + (*corners)[i + 1U], base + (*corners)[i + 2U]};
                 if (mirrored) std::swap(face[1], face[2]);
                 output.faces.push_back(face);
             }
         }
     }
     if (output.vertices.empty() || output.faces.empty())
-        return std::unexpected(detail::fail(error_code::invalid_format, "GLB has no indexed triangle geometry"));
+        return std::unexpected(detail::fail(error_code::invalid_format, "GLB has no triangle geometry"));
     if (!has_colors) output.colors.clear();
     if (material_vertices != 0U) {
         output.metallic_factor = static_cast<float>(metallic_sum / static_cast<double>(material_vertices));
@@ -1914,14 +1935,10 @@ result<std::vector<std::byte>> save_rigged_source_glb_memory(
                 }
             }
             if (mirrored) {
-                auto indices = get_accessor(*doc, primitive["indices"].get<std::size_t>());
-                if (!indices) return std::unexpected(indices.error());
-                std::vector<std::uint32_t> flipped(indices->count);
-                for (std::size_t i = 0; i < indices->count; ++i) {
-                    auto value = index_value(*indices, i);
-                    if (!value) return std::unexpected(value.error());
-                    flipped[i] = *value;
-                }
+                // A non-indexed primitive gets indices here so its corners can swap.
+                result<std::vector<std::uint32_t>> corners = primitive_corners(*doc, primitive, n);
+                if (!corners) return std::unexpected(corners.error());
+                std::vector<std::uint32_t> flipped = std::move(*corners);
                 for (std::size_t i = 0; i + 2U < flipped.size(); i += 3U) std::swap(flipped[i + 1U], flipped[i + 2U]);
                 out["indices"] = builder.accessor_for<std::uint32_t>(flipped, 5125U, "SCALAR", 34963U);
             }
