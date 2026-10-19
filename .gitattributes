@@ -1,2 +1,0 @@
-# ggml/ is vendored third-party code: GitHub leaves it out of the language stats.
-ggml/** linguist-vendored
