@@ -1,0 +1,51 @@
+cff-version: 1.2.0
+title: skin-tokens-ggml
+message: >-
+  If you use this software, please cite it and the upstream sources listed under `references`.
+type: software
+authors:
+  - family-names: Lee
+    given-names: "K. S. Ernest (iFire)"
+    alias: fire
+    website: https://github.com/fire
+license: Apache-2.0
+repository-code: https://github.com/V-Sekai-fire/skin-tokens-ggml
+date-released: "2026-10-19"
+references:
+  # SkinTokens -- MIT (attribution required): the model this library runs.
+  - type: software
+    title: SkinTokens (TokenRig)
+    authors:
+      - name: VAST-AI-Research contributors
+    repository-code: https://github.com/VAST-AI-Research/SkinTokens
+    url: https://huggingface.co/VAST-AI/SkinTokens
+    license: MIT
+  # ggml -- MIT (attribution required): the tensor library.
+  - type: software
+    title: ggml
+    authors:
+      - name: The ggml authors
+    repository-code: https://github.com/ggml-org/ggml
+    license: MIT
+  # llama.cpp -- MIT (courtesy): reference for the Qwen3 graph layout; no source is incorporated.
+  - type: software
+    title: llama.cpp
+    authors:
+      - name: The ggml authors
+    repository-code: https://github.com/ggml-org/llama.cpp
+    license: MIT
+  # NumPy -- BSD-3-Clause (attribution required): the PCG64 and choice routines follow its algorithms.
+  - type: software
+    title: NumPy
+    authors:
+      - name: NumPy Developers
+    repository-code: https://github.com/numpy/numpy
+    version: 1.26.4
+    license: BSD-3-Clause
+  # Kimodo -- Apache-2.0 (courtesy): the motion clips this library cuts and moves onto a rig.
+  - type: software
+    title: Kimodo
+    authors:
+      - name: NVIDIA
+    repository-code: https://github.com/nv-tlabs/kimodo
+    license: Apache-2.0
