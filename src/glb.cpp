@@ -2017,16 +2017,38 @@ result<std::vector<std::byte>> add_animation_glb_memory(
         root["buffers"][0].contains("uri"))
         return std::unexpected(detail::fail(error_code::invalid_format, "rigged GLB must hold one skin and a binary chunk"));
     const std::size_t joint_count = animation.rig.names.size();
+    // Twist helpers in the skin ("<joint>Twist1".."4", leaves) that the clip does not name are turned
+    // from the clip below; every other skin joint must be in the clip.
+    const json & skin_joints = root["skins"][0]["joints"];
+    std::vector<std::size_t> helper_nodes;
+    {
+        std::vector<std::int32_t> parent_of(root["nodes"].size(), -1);
+        for (std::size_t node = 0; node < root["nodes"].size(); ++node)
+            for (const auto & child : root["nodes"][node].value("children", json::array()))
+                if (child.is_number_unsigned() && child.get<std::size_t>() < parent_of.size())
+                    parent_of[child.get<std::size_t>()] = static_cast<std::int32_t>(node);
+        for (const auto & value : skin_joints) {
+            const std::size_t node = value.get<std::size_t>();
+            const std::string name = root["nodes"][node].value("name", std::string{});
+            if (std::find(animation.rig.names.begin(), animation.rig.names.end(), name) != animation.rig.names.end()) continue;
+            const std::int32_t parent = parent_of[node];
+            if (parent < 0 || root["nodes"][node].contains("children")) continue;
+            const std::string stem = root["nodes"][static_cast<std::size_t>(parent)].value("name", std::string{}) + "Twist";
+            if (name.size() == stem.size() + 1U && name.compare(0, stem.size(), stem) == 0 &&
+                name.back() >= '1' && name.back() <= static_cast<char>('0' + twist_helpers_per_segment))
+                helper_nodes.push_back(node);
+        }
+    }
     if (animation.frames == 0U || animation.root_translations.size() != animation.frames ||
         animation.local_rotations.size() != animation.frames * joint_count ||
-        root["skins"][0]["joints"].size() != joint_count)
+        skin_joints.size() != joint_count + helper_nodes.size())
         return std::unexpected(detail::fail(error_code::invalid_argument, "animation does not match the skin skeleton"));
     // The clip's joints are the skin's, found by name (the skeleton loader names them the same way).
     std::vector<std::size_t> targets(joint_count);
     for (std::size_t joint = 0; joint < joint_count; ++joint) {
         std::size_t found = no_node;
-        for (std::size_t slot = 0; slot < joint_count; ++slot) {
-            const std::size_t node = root["skins"][0]["joints"][slot].get<std::size_t>();
+        for (std::size_t slot = 0; slot < skin_joints.size(); ++slot) {
+            const std::size_t node = skin_joints[slot].get<std::size_t>();
             if (root["nodes"][node].value("name", "joint_" + std::to_string(slot)) != animation.rig.names[joint]) continue;
             if (found != no_node)
                 return std::unexpected(detail::fail(error_code::invalid_format, "skin joint names are not unique"));
@@ -2072,6 +2094,57 @@ result<std::vector<std::byte>> add_animation_glb_memory(
         samplers.push_back({{"input", time_accessor}, {"output", builder.accessor_for<quat>(values, 5126U, "VEC4")},
                             {"interpolation", "LINEAR"}});
         channels.push_back({{"sampler", sampler}, {"target", {{"node", targets[joint]}, {"path", "rotation"}}}});
+    }
+    // Twist helpers (SOMA-X): helper k turns about its segment by fraction k of the end joint's
+    // twist; on an upper segment (whose end has helpers too) it also undoes (1 - fraction k) of the
+    // start joint's own twist. Angles come from the clip's rest-aligned local rotations.
+    if (!helper_nodes.empty()) {
+        const auto clip_index = [&](std::size_t node) -> std::int32_t {
+            for (std::size_t joint = 0; joint < joint_count; ++joint) if (targets[joint] == node) return static_cast<std::int32_t>(joint);
+            return -1;
+        };
+        const auto twist_angle = [](quat q, vec3 axis) {
+            const float along = q.x * axis.x + q.y * axis.y + q.z * axis.z;
+            float angle = 2.0F * std::atan2(along, q.w);
+            if (angle > 3.14159265F) angle -= 6.28318531F;
+            if (angle < -3.14159265F) angle += 6.28318531F;
+            return angle;
+        };
+        std::vector<std::uint8_t> has_helpers(joint_count, 0U);
+        for (const auto node : helper_nodes) {
+            const std::int32_t start = clip_index(static_cast<std::size_t>(node_parent[node]));
+            if (start >= 0) has_helpers[static_cast<std::size_t>(start)] = 1U;
+        }
+        const auto & fractions = twist_fractions();
+        for (const auto node : helper_nodes) {
+            const std::int32_t start = clip_index(static_cast<std::size_t>(node_parent[node]));
+            if (start < 0) continue;
+            std::int32_t end = -1;
+            std::size_t ends = 0;
+            for (std::size_t joint = 0; joint < joint_count; ++joint)
+                if (animation.rig.parents[joint] == start) { end = static_cast<std::int32_t>(joint); ++ends; }
+            if (ends != 1U) continue;  // no single segment end: the helper stays at rest
+            const std::size_t s = static_cast<std::size_t>(start), e = static_cast<std::size_t>(end);
+            const bool reverse = has_helpers[e] != 0U;
+            const vec3 d = sub(animation.rig.rest_positions[e], animation.rig.rest_positions[s]);
+            const float length = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+            if (length < 1e-8F) continue;
+            const vec3 axis{d.x / length, d.y / length, d.z / length};
+            const std::size_t k = static_cast<std::size_t>(root["nodes"][node].value("name", std::string{}).back() - '1');
+            const quat helper_parent = world_rest(node_parent[node], 0), helper_own = world_rest(static_cast<std::int32_t>(node), 0);
+            std::vector<quat> values(animation.frames);
+            for (std::size_t frame = 0; frame < animation.frames; ++frame) {
+                float angle = fractions[k] * twist_angle(animation.local_rotations[frame * joint_count + e], axis);
+                if (reverse) angle -= (1.0F - fractions[k]) * twist_angle(animation.local_rotations[frame * joint_count + s], axis);
+                const float half = 0.5F * angle, sine = std::sin(half);
+                const quat local{axis.x * sine, axis.y * sine, axis.z * sine, std::cos(half)};
+                values[frame] = q_norm(q_mul(q_mul(q_conj(helper_parent), local), helper_own));
+            }
+            const auto sampler = samplers.size();
+            samplers.push_back({{"input", time_accessor}, {"output", builder.accessor_for<quat>(values, 5126U, "VEC4")},
+                                {"interpolation", "LINEAR"}});
+            channels.push_back({{"sampler", sampler}, {"target", {{"node", node}, {"path", "rotation"}}}});
+        }
     }
     const std::string name = animation_name(animation);
     // The new clip goes first: readers that take animations[0] (load_kimodo_glb_file) get the motion.

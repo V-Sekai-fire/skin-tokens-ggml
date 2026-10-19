@@ -246,9 +246,10 @@ result<std::pair<std::vector<std::byte>, humanoid_match_report>> add_soma30_moti
         return std::unexpected(detail::fail(error_code::invalid_argument, "motion is not a SOMA30 clip"));
     auto asset = load_skinned_glb_memory(rigged);
     if (!asset) return std::unexpected(asset.error());
-    auto mapping = match_generated_humanoid(asset->binding.rig, match_options);
+    const skeleton body = detail::without_twist_helpers(asset->binding.rig);  // helpers follow the clip
+    auto mapping = match_generated_humanoid(body, match_options);
     if (!mapping) return std::unexpected(mapping.error());
-    auto animation = retarget_soma30_motion_to_generated(soma30, asset->binding.rig, *mapping, options);
+    auto animation = retarget_soma30_motion_to_generated(soma30, body, *mapping, options);
     if (!animation) return std::unexpected(animation.error());
     animation->name = soma30.name;
     auto bytes = add_animation_glb_memory(rigged, *animation);

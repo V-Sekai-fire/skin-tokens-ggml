@@ -387,6 +387,31 @@ private:
 // {"gates":"fail","why":"<first failed gate>"}.
 [[nodiscard]] SKINTOKENS_API std::string humanoid_roles_json(const skeleton & generated);
 
+// Twist bones after SOMA-X: four helpers on each upper arm, forearm, thigh and shin of a rig that
+// passes the humanoid match, at twist_fractions() of the segment, children of the segment's start
+// joint and named "<start>Twist1".."<start>Twist4". The start joint's skin weight is split among
+// them by where each vertex lies along the segment (a ggml graph on runtime's device); each vertex
+// keeps its four largest weights. A clip turns helper k about the segment by fraction k of the end
+// joint's twist; a reverse (upper) segment also undoes (1 - fraction k) of the start joint's own
+// twist relative to its parent.
+inline constexpr std::size_t twist_helpers_per_segment = 4U;
+struct twist_segment {
+    std::int32_t parent = -1;
+    std::int32_t start = -1;
+    std::int32_t end = -1;
+    bool reverse = false;
+    std::array<std::int32_t, twist_helpers_per_segment> helpers{};
+};
+struct twist_rig {
+    skin binding;
+    std::vector<twist_segment> segments;
+    // Per vertex, per segment, per helper: the share of the start joint's weight (sums to 1).
+    std::vector<float> shares;
+};
+[[nodiscard]] SKINTOKENS_API const std::array<float, twist_helpers_per_segment> & twist_fractions();
+[[nodiscard]] SKINTOKENS_API result<twist_rig> add_twist_joints(
+    const mesh & geometry, const skin & binding, const runtime_options & runtime = {});
+
 // Transfers SOMA30 motion onto the generated hierarchy. The target hierarchy,
 // bind pose, and learned skin weights are not modified.
 [[nodiscard]] SKINTOKENS_API result<motion> retarget_soma30_motion_to_generated(

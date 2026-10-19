@@ -37,3 +37,7 @@ add_executable(skintokens-motion-clip-test motion_clip_test.cpp)
 target_link_libraries(skintokens-motion-clip-test PRIVATE skintokens::skintokens)
 add_test(NAME skintokens-motion-clip-test COMMAND skintokens-motion-clip-test)
 
+add_executable(skintokens-twist-test twist_test.cpp)
+target_link_libraries(skintokens-twist-test PRIVATE skintokens::skintokens)
+add_test(NAME skintokens-twist-test COMMAND skintokens-twist-test)
+set_target_properties(skintokens-twist-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")

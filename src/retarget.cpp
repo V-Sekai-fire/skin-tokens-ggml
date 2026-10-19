@@ -766,10 +766,11 @@ result<humanoid_match_report> retarget_soma30_glb_file(
     if (identify_rig(source->rig)!=rig_kind::soma30)
         return std::unexpected(detail::fail(error_code::invalid_argument,
             "motion GLB is not a recognized SOMA30 animation"));
-    auto mapping=match_generated_humanoid(asset->binding.rig,match_options);
+    const skeleton body=detail::without_twist_helpers(asset->binding.rig);  // helpers follow the clip
+    auto mapping=match_generated_humanoid(body,match_options);
     if (!mapping) return std::unexpected(mapping.error());
     auto animation=retarget_soma30_motion_to_generated(
-        *source,asset->binding.rig,*mapping,options);
+        *source,body,*mapping,options);
     if (!animation) return std::unexpected(animation.error());
     animation->name=source->name;
     // Add the clip to the rigged file itself, so its materials, textures and RESET clip stay.

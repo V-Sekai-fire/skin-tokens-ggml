@@ -19,7 +19,7 @@ void usage() {
               << "  skintokens-cli inspect MODEL_DIR [--device auto|cpu|vulkan]\n"
               << "  skintokens-cli rig MODEL_DIR MESH.{glb,t2mesh} OUTPUT.glb"
                  " [--device auto|cpu|vulkan] [--postprocess] [--no-robust-transfer]"
-                 " [--beams N] [--temperature F] [--max-tokens N]\n"
+                 " [--beams N] [--temperature F] [--max-tokens N] [--twist]\n"
               << "  skintokens-cli skin MODEL_DIR MESH.{glb,t2mesh} SKELETON.glb OUTPUT.glb"
                  " [--device auto|cpu|vulkan] [--fit none|global|articulated]"
                  " [--retarget-soma-to-mixamo52]"
@@ -288,6 +288,7 @@ int main(int argc, char ** argv) {
     generation.temperature = 0.0F;
     auto fit = skintokens::skeleton_fit::global_similarity;
     bool supplied_skeleton = false;
+    bool twist = false;  // rig: add SOMA-X style twist helpers to a humanoid
     std::string_view target_rig = "soma30";
     for (int i = 3; i + 1 < argc; ++i) {
         if (std::string_view{argv[i]} == "--device") runtime.device = parse_device(argv[++i]);
@@ -313,6 +314,7 @@ int main(int argc, char ** argv) {
         else if (std::string_view{argv[i]} == "--raw-learned") generation.surface_postprocess = false;
         else if (std::string_view{argv[i]} == "--postprocess") generation.surface_postprocess = true;
         else if (std::string_view{argv[i]} == "--no-robust-transfer") generation.robust_transfer = false;
+        else if (std::string_view{argv[i]} == "--twist") twist = true;
         else if (std::string_view{argv[i]} == "--beams") generation.beams = static_cast<std::uint32_t>(std::stoul(argv[++i]));
         else if (std::string_view{argv[i]} == "--temperature") generation.temperature = std::stof(argv[++i]);
         else if (std::string_view{argv[i]} == "--max-tokens") generation.max_tokens = std::stoul(argv[++i]);
@@ -322,6 +324,7 @@ int main(int argc, char ** argv) {
     if (argc > 3 && std::string_view{argv[argc - 1]} == "--supplied-skeleton") supplied_skeleton = true;
     if (argc > 3 && std::string_view{argv[argc - 1]} == "--raw-learned") generation.surface_postprocess = false;
     if (argc > 3 && std::string_view{argv[argc - 1]} == "--postprocess") generation.surface_postprocess = true;
+    if (argc > 3 && std::string_view{argv[argc - 1]} == "--twist") twist = true;
     if (argc > 3 && std::string_view{argv[argc - 1]} == "--retarget-soma-to-mixamo52") {
         target_rig = "mixamo52";
         supplied_skeleton = true;
@@ -343,6 +346,16 @@ int main(int argc, char ** argv) {
         if (!geometry) { std::cerr << geometry.error().message << '\n'; return 1; }
         auto binding = model->rig(*geometry, generation);
         if (!binding) { std::cerr << binding.error().message << '\n'; return 1; }
+        if (twist) {
+            auto twisted = skintokens::add_twist_joints(*geometry, *binding, runtime);
+            if (twisted) {
+                std::cout << "twist helpers: " << twisted->segments.size() << " segments, "
+                          << twisted->segments.size() * skintokens::twist_helpers_per_segment << " joints\n";
+                *binding = std::move(twisted->binding);
+            } else {
+                std::cout << "twist helpers skipped: " << twisted.error().message << '\n';
+            }
+        }
 
         // A rigged static GLB still needs one identity pose so ordinary glTF
         // viewers can evaluate the skin immediately. It can later receive

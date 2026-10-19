@@ -230,4 +230,10 @@ struct skeleton_prefix {
     std::span<const std::int32_t> codes, std::span<const float> condition_latents,
     std::span<const vec3> points, std::span<const vec3> normals);
 
+// Twist helpers (src/twist.cpp): a leaf joint named "<parent>Twist1".."<parent>Twist4".
+[[nodiscard]] bool is_twist_helper(const skeleton & rig, std::size_t joint);
+// The rig without its twist helpers, for matching and retargeting: clips drive the other joints,
+// and add_animation_glb_memory computes the helpers' turns from them.
+[[nodiscard]] skeleton without_twist_helpers(const skeleton & rig);
+
 } // namespace skintokens::detail

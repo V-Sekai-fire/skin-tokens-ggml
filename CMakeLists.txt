@@ -109,6 +109,7 @@ add_library(skintokens SHARED
   src/model.cpp
   src/qwen.cpp
   src/retarget.cpp
+  src/twist.cpp
   src/motion_clip.cpp
   src/skinning.cpp
   src/skin_vae.cpp
