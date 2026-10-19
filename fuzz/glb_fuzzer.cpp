@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <fstream>
 
-extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t * data, std::size_t size) {
+extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) {
     if (size > (2U << 20U)) return 0;
     static const auto path = std::filesystem::temp_directory_path() / "skintokens-glb-fuzzer.glb";
     {

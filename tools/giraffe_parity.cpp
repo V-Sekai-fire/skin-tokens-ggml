@@ -22,7 +22,7 @@
 namespace {
 
 template<class T>
-std::vector<T> read_array(const std::filesystem::path & path, std::size_t count) {
+std::vector<T> read_array(const std::filesystem::path &path, std::size_t count) {
     if (count > std::numeric_limits<std::size_t>::max() / sizeof(T))
         throw std::runtime_error("fixture array size overflows");
     const auto bytes = count * sizeof(T);
@@ -66,7 +66,7 @@ struct binding_difference {
 };
 
 binding_difference compare_binding(
-    const skintokens::skin & actual,
+    const skintokens::skin &actual,
     std::span<const std::uint16_t> expected_joints,
     std::span<const float> expected_weights,
     std::size_t joint_count) {
@@ -96,11 +96,11 @@ binding_difference compare_binding(
         exact += vertex_exact ? 1U : 0U;
     }
     return {compare(actual_dense, expected_dense),
-            static_cast<double>(exact) / static_cast<double>(vertex_count),
-            static_cast<double>(shared) / static_cast<double>(vertex_count * 4U)};
+        static_cast<double>(exact) / static_cast<double>(vertex_count),
+        static_cast<double>(shared) / static_cast<double>(vertex_count * 4U)};
 }
 
-void print_binding(std::string_view name, const binding_difference & value) {
+void print_binding(std::string_view name, const binding_difference &value) {
     std::cout << name << " max_abs=" << value.dense.maximum
               << " relative_l2=" << value.dense.relative_l2
               << " exact_top4_vertices=" << value.exact_vertices
@@ -109,7 +109,7 @@ void print_binding(std::string_view name, const binding_difference & value) {
 
 } // namespace
 
-int main(int argc, char ** argv) try {
+int main(int argc, char **argv) try {
     if (argc != 4) {
         std::cerr << "usage: skintokens-giraffe-parity MODEL_DIR FIXTURE_DIR cpu|vulkan\n";
         return 2;
@@ -176,7 +176,7 @@ int main(int argc, char ** argv) try {
         fixture / "f32-surface-distances.f64", joint_count * vertex_count);
     std::vector<float> expected_distances(expected_distance_f64.size());
     std::transform(expected_distance_f64.begin(), expected_distance_f64.end(),
-                   expected_distances.begin(), [](double value) { return static_cast<float>(value); });
+        expected_distances.begin(), [](double value) { return static_cast<float>(value); });
     const auto graph_nodes = manifest.at("graph_node_count").get<std::size_t>();
     const auto graph_edges = manifest.at("graph_edge_count").get<std::size_t>();
     const auto graph_indptr = read_array<std::int32_t>(fixture / "f32-graph-indptr.i32", graph_nodes + 1U);
@@ -194,12 +194,12 @@ int main(int argc, char ** argv) try {
     for (std::size_t index = 0; index < vertex_count; ++index) {
         vertices[index] = {flat_vertices[index * 3U], flat_vertices[index * 3U + 1U], flat_vertices[index * 3U + 2U]};
         precise_vertices[index] = {precise_vertex_values[index * 3U], precise_vertex_values[index * 3U + 1U],
-                                   precise_vertex_values[index * 3U + 2U]};
+            precise_vertex_values[index * 3U + 2U]};
     }
     for (std::size_t index = 0; index < joint_count; ++index) {
         joints[index] = {flat_joints[index * 3U], flat_joints[index * 3U + 1U], flat_joints[index * 3U + 2U]};
         precise_joints[index] = {precise_joint_values[index * 3U], precise_joint_values[index * 3U + 1U],
-                                 precise_joint_values[index * 3U + 2U]};
+            precise_joint_values[index * 3U + 2U]};
     }
 
     skintokens::runtime_options options;
@@ -272,40 +272,40 @@ int main(int argc, char ** argv) try {
     std::cout << "surface_weights max_abs=" << surface_error.maximum
               << " relative_l2=" << surface_error.relative_l2 << '\n';
     const auto distance_error = compare(post_trace.surface_distances, expected_distances);
-    std::size_t worst_distance=0U;
-    for (std::size_t index=1; index<expected_distances.size(); ++index)
-        if (std::abs(post_trace.surface_distances[index]-expected_distances[index]) >
-            std::abs(post_trace.surface_distances[worst_distance]-expected_distances[worst_distance]))
-            worst_distance=index;
+    std::size_t worst_distance = 0U;
+    for (std::size_t index = 1; index < expected_distances.size(); ++index)
+        if (std::abs(post_trace.surface_distances[index] - expected_distances[index]) >
+            std::abs(post_trace.surface_distances[worst_distance] - expected_distances[worst_distance]))
+            worst_distance = index;
     std::cout << "surface_distances max_abs=" << distance_error.maximum
               << " relative_l2=" << distance_error.relative_l2
               << " graph_edges=" << post_trace.surface_graph_edges << '/'
               << manifest.at("graph_edge_count").get<std::size_t>()
               << " max_distance=" << post_trace.maximum_surface_distance << '/'
               << manifest.at("maximum_surface_distance").get<double>()
-              << " worst_joint=" << worst_distance/vertex_count
-              << " worst_vertex=" << worst_distance%vertex_count
+              << " worst_joint=" << worst_distance / vertex_count
+              << " worst_vertex=" << worst_distance % vertex_count
               << " actual=" << post_trace.surface_distances[worst_distance]
               << " expected=" << expected_distances[worst_distance] << '\n';
     std::unordered_map<std::uint64_t, double> reference_graph;
-    for (std::size_t source=0; source<graph_nodes; ++source)
-        for (std::int32_t offset=graph_indptr[source]; offset<graph_indptr[source+1U]; ++offset)
-            reference_graph[(static_cast<std::uint64_t>(source)<<32U) |
+    for (std::size_t source = 0; source < graph_nodes; ++source)
+        for (std::int32_t offset = graph_indptr[source]; offset < graph_indptr[source + 1U]; ++offset)
+            reference_graph[(static_cast<std::uint64_t>(source) << 32U) |
                 static_cast<std::uint32_t>(graph_indices[static_cast<std::size_t>(offset)])] =
-                    graph_weights[static_cast<std::size_t>(offset)];
+                graph_weights[static_cast<std::size_t>(offset)];
     std::unordered_map<std::uint64_t, float> actual_graph;
-    for (std::size_t edge=0; edge<post_trace.surface_graph_sources.size(); ++edge)
-        actual_graph[(static_cast<std::uint64_t>(post_trace.surface_graph_sources[edge])<<32U) |
+    for (std::size_t edge = 0; edge < post_trace.surface_graph_sources.size(); ++edge)
+        actual_graph[(static_cast<std::uint64_t>(post_trace.surface_graph_sources[edge]) << 32U) |
             post_trace.surface_graph_targets[edge]] = post_trace.surface_graph_weights[edge];
-    std::size_t missing_edges=0U, extra_edges=0U, printed=0U;
-    double graph_weight_max=0.0;
+    std::size_t missing_edges = 0U, extra_edges = 0U, printed = 0U;
+    double graph_weight_max = 0.0;
     for (const auto [key, expected] : reference_graph) {
-        const auto found=actual_graph.find(key);
-        if (found==actual_graph.end()) {
+        const auto found = actual_graph.find(key);
+        if (found == actual_graph.end()) {
             ++missing_edges;
-            if (printed++<8U) std::cout << "missing_graph_edge " << (key>>32U) << "->"
-                                       << static_cast<std::uint32_t>(key) << " weight=" << expected << '\n';
-        } else graph_weight_max=std::max(graph_weight_max,std::abs(static_cast<double>(found->second)-expected));
+            if (printed++ < 8U) std::cout << "missing_graph_edge " << (key >> 32U) << "->"
+                                          << static_cast<std::uint32_t>(key) << " weight=" << expected << '\n';
+        } else graph_weight_max = std::max(graph_weight_max, std::abs(static_cast<double>(found->second) - expected));
     }
     for (const auto [key, unused] : actual_graph)
         extra_edges += reference_graph.contains(key) ? 0U : 1U;
@@ -344,14 +344,14 @@ int main(int argc, char ** argv) try {
     // decoder or raw final-weight regression.
     const bool passed = cpu ?
         (sampled_error.maximum <= 2.0e-4 && sampled_error.relative_l2 <= 3.0e-5 &&
-         raw_dense_error.maximum <= 3.0e-4 && raw_dense_error.relative_l2 <= 1.0e-4 &&
-         raw_binding_error.dense.relative_l2 <= 1.0e-3 && raw_binding_error.shared_slots >= 0.999) :
+            raw_dense_error.maximum <= 3.0e-4 && raw_dense_error.relative_l2 <= 1.0e-4 &&
+            raw_binding_error.dense.relative_l2 <= 1.0e-3 && raw_binding_error.shared_slots >= 0.999) :
         (sampled_error.maximum <= 2.0e-2 && sampled_error.relative_l2 <= 2.0e-3 &&
-         raw_dense_error.maximum <= 3.0e-2 && raw_dense_error.relative_l2 <= 3.0e-3 &&
-         raw_binding_error.dense.relative_l2 <= 1.5e-2 && raw_binding_error.shared_slots >= 0.995);
+            raw_dense_error.maximum <= 3.0e-2 && raw_dense_error.relative_l2 <= 3.0e-3 &&
+            raw_binding_error.dense.relative_l2 <= 1.5e-2 && raw_binding_error.shared_slots >= 0.995);
     std::cout << "raw_default_result=" << (passed ? "PASS" : "FAIL") << '\n';
     return passed ? 0 : 1;
-} catch (const std::exception & exception) {
+} catch (const std::exception &exception) {
     std::cerr << "giraffe parity: " << exception.what() << '\n';
     return 2;
 }

@@ -21,7 +21,7 @@
 namespace {
 
 template<class T>
-std::vector<T> read_array(const std::filesystem::path & path, std::size_t count) {
+std::vector<T> read_array(const std::filesystem::path &path, std::size_t count) {
     if (count > std::numeric_limits<std::size_t>::max() / sizeof(T))
         throw std::runtime_error("fixture array size overflows");
     const auto bytes = count * sizeof(T);
@@ -62,7 +62,7 @@ difference compare(std::span<const float> actual, std::span<const float> expecte
 
 } // namespace
 
-int main(int argc, char ** argv) try {
+int main(int argc, char **argv) try {
     if (argc != 4) {
         std::cerr << "usage: skintokens-full-binding-parity MODEL_DIR FIXTURE_DIR cpu|vulkan\n";
         return 2;
@@ -137,7 +137,7 @@ int main(int argc, char ** argv) try {
         normalized[index] = {flat_normalized[index * 3U], flat_normalized[index * 3U + 1U], flat_normalized[index * 3U + 2U]};
     for (std::size_t index = 0; index < joint_count; ++index)
         normalized_joints[index] = {flat_normalized_joints[index * 3U], flat_normalized_joints[index * 3U + 1U],
-                                     flat_normalized_joints[index * 3U + 2U]};
+            flat_normalized_joints[index * 3U + 2U]};
 
     skintokens::runtime_options options;
     options.device = parse_device(argv[3]);
@@ -186,10 +186,10 @@ int main(int argc, char ** argv) try {
     target.names.resize(joint_count);
     target.parents = parents;
     target.rest_positions.resize(joint_count);
-    for (std::size_t joint=0; joint<joint_count; ++joint) {
+    for (std::size_t joint = 0; joint < joint_count; ++joint) {
         target.names[joint] = "joint_" + std::to_string(joint);
-        target.rest_positions[joint] = {rest_positions[joint*3U], rest_positions[joint*3U+1U],
-                                        rest_positions[joint*3U+2U]};
+        target.rest_positions[joint] = {rest_positions[joint * 3U], rest_positions[joint * 3U + 1U],
+            rest_positions[joint * 3U + 2U]};
     }
     skintokens::detail::binding_trace binding_trace;
     const auto binding = skintokens::detail::integrate_postprocessed_binding(
@@ -204,30 +204,30 @@ int main(int argc, char ** argv) try {
         std::cout << "mesh_surface_diagnostic max_abs=" << mesh_error.maximum
                   << " relative_l2=" << mesh_error.relative_l2 << '\n';
     }
-    using voxel = std::array<std::int32_t,3>;
-    std::vector<voxel> actual_voxels(binding_trace.voxel_coordinates.size()/3U), reference_voxels(voxel_count);
-    for (std::size_t index=0; index<actual_voxels.size(); ++index)
-        actual_voxels[index]={binding_trace.voxel_coordinates[index*3U],binding_trace.voxel_coordinates[index*3U+1U],binding_trace.voxel_coordinates[index*3U+2U]};
-    for (std::size_t index=0; index<reference_voxels.size(); ++index)
-        reference_voxels[index]={expected_voxels[index*3U],expected_voxels[index*3U+1U],expected_voxels[index*3U+2U]};
-    const bool voxel_order_exact=actual_voxels==reference_voxels;
-    std::sort(actual_voxels.begin(),actual_voxels.end());
-    std::sort(reference_voxels.begin(),reference_voxels.end());
-    const bool voxel_exact=actual_voxels==reference_voxels;
-    std::size_t seed_position_matches=0U;
-    std::size_t mesh_seed_indices=0U,mesh_seed_index_matches=0U;
-    const auto seed_position=[&](std::uint32_t seed, std::span<const std::int32_t> voxel_values) {
-        if (seed<vertex_count) return normalized[seed];
-        const auto offset=(static_cast<std::size_t>(seed)-vertex_count)*3U;
-        return skintokens::vec3{static_cast<float>(voxel_values[offset]),static_cast<float>(voxel_values[offset+1U]),static_cast<float>(voxel_values[offset+2U])};
+    using voxel = std::array<std::int32_t, 3>;
+    std::vector<voxel> actual_voxels(binding_trace.voxel_coordinates.size() / 3U), reference_voxels(voxel_count);
+    for (std::size_t index = 0; index < actual_voxels.size(); ++index)
+        actual_voxels[index] = {binding_trace.voxel_coordinates[index * 3U], binding_trace.voxel_coordinates[index * 3U + 1U], binding_trace.voxel_coordinates[index * 3U + 2U]};
+    for (std::size_t index = 0; index < reference_voxels.size(); ++index)
+        reference_voxels[index] = {expected_voxels[index * 3U], expected_voxels[index * 3U + 1U], expected_voxels[index * 3U + 2U]};
+    const bool voxel_order_exact = actual_voxels == reference_voxels;
+    std::sort(actual_voxels.begin(), actual_voxels.end());
+    std::sort(reference_voxels.begin(), reference_voxels.end());
+    const bool voxel_exact = actual_voxels == reference_voxels;
+    std::size_t seed_position_matches = 0U;
+    std::size_t mesh_seed_indices = 0U, mesh_seed_index_matches = 0U;
+    const auto seed_position = [&](std::uint32_t seed, std::span<const std::int32_t> voxel_values) {
+        if (seed < vertex_count) return normalized[seed];
+        const auto offset = (static_cast<std::size_t>(seed) - vertex_count) * 3U;
+        return skintokens::vec3{static_cast<float>(voxel_values[offset]), static_cast<float>(voxel_values[offset + 1U]), static_cast<float>(voxel_values[offset + 2U])};
     };
-    for (std::size_t joint=0; joint<joint_count; ++joint) {
-        const auto actual=seed_position(binding_trace.surface_seeds[joint],binding_trace.voxel_coordinates);
-        const auto expected=seed_position(expected_seeds[joint],expected_voxels);
-        seed_position_matches += actual.x==expected.x && actual.y==expected.y && actual.z==expected.z ? 1U : 0U;
-        if (expected_seeds[joint]<vertex_count) {
+    for (std::size_t joint = 0; joint < joint_count; ++joint) {
+        const auto actual = seed_position(binding_trace.surface_seeds[joint], binding_trace.voxel_coordinates);
+        const auto expected = seed_position(expected_seeds[joint], expected_voxels);
+        seed_position_matches += actual.x == expected.x && actual.y == expected.y && actual.z == expected.z ? 1U : 0U;
+        if (expected_seeds[joint] < vertex_count) {
             ++mesh_seed_indices;
-            mesh_seed_index_matches += binding_trace.surface_seeds[joint]==expected_seeds[joint] ? 1U : 0U;
+            mesh_seed_index_matches += binding_trace.surface_seeds[joint] == expected_seeds[joint] ? 1U : 0U;
         }
     }
     std::cout << "voxels actual=" << actual_voxels.size() << " expected=" << reference_voxels.size()
@@ -268,13 +268,13 @@ int main(int argc, char ** argv) try {
               << " shared_top4_slots=" << slot_fraction;
     if (first_mismatch != vertex_count) {
         std::cout << " first_mismatch=" << first_mismatch << " actual=[";
-        for (std::size_t slot=0; slot<4U; ++slot)
+        for (std::size_t slot = 0; slot < 4U; ++slot)
             std::cout << (slot ? "," : "") << binding.joints[first_mismatch][slot]
                       << ':' << binding.weights[first_mismatch][slot];
         std::cout << "] expected=[";
-        for (std::size_t slot=0; slot<4U; ++slot)
-            std::cout << (slot ? "," : "") << expected_joints[first_mismatch*4U+slot]
-                      << ':' << expected_weights[first_mismatch*4U+slot];
+        for (std::size_t slot = 0; slot < 4U; ++slot)
+            std::cout << (slot ? "," : "") << expected_joints[first_mismatch * 4U + slot]
+                      << ':' << expected_weights[first_mismatch * 4U + slot];
         std::cout << ']';
     }
     std::cout << '\n';
@@ -285,23 +285,23 @@ int main(int argc, char ** argv) try {
     // comparison cannot see.
     skintokens::mesh geometry;
     geometry.vertices.resize(vertex_count);
-    for (std::size_t vertex=0; vertex<vertex_count; ++vertex)
-        geometry.vertices[vertex] = {positions[vertex*3U], positions[vertex*3U+1U],
-                                     positions[vertex*3U+2U]};
+    for (std::size_t vertex = 0; vertex < vertex_count; ++vertex)
+        geometry.vertices[vertex] = {positions[vertex * 3U], positions[vertex * 3U + 1U],
+            positions[vertex * 3U + 2U]};
     skintokens::motion animation;
     animation.frames = frame_count;
     animation.frames_per_second = manifest.value("frames_per_second", 30.0F);
     animation.rig = target;
     animation.root_translations.resize(frame_count);
     animation.local_rotations.resize(frame_count * joint_count);
-    for (std::size_t frame=0; frame<frame_count; ++frame) {
-        animation.root_translations[frame] = {root_translations[frame*3U], root_translations[frame*3U+1U],
-                                               root_translations[frame*3U+2U]};
-        for (std::size_t joint=0; joint<joint_count; ++joint) {
-            const auto offset=(frame*joint_count+joint)*4U;
-            animation.local_rotations[frame*joint_count+joint] = {
-                local_rotations[offset], local_rotations[offset+1U],
-                local_rotations[offset+2U], local_rotations[offset+3U]};
+    for (std::size_t frame = 0; frame < frame_count; ++frame) {
+        animation.root_translations[frame] = {root_translations[frame * 3U], root_translations[frame * 3U + 1U],
+            root_translations[frame * 3U + 2U]};
+        for (std::size_t joint = 0; joint < joint_count; ++joint) {
+            const auto offset = (frame * joint_count + joint) * 4U;
+            animation.local_rotations[frame * joint_count + joint] = {
+                local_rotations[offset], local_rotations[offset + 1U],
+                local_rotations[offset + 2U], local_rotations[offset + 3U]};
         }
     }
     std::vector<float> actual_animated;
@@ -322,22 +322,22 @@ int main(int argc, char ** argv) try {
     const bool cpu = options.device == skintokens::device_kind::cpu;
     const bool passed = cpu ?
         (condition_error.maximum <= 1.0e-5 && condition_error.relative_l2 <= 1.0e-5 &&
-         sampled_error.maximum <= 2.0e-4 && sampled_error.relative_l2 <= 2.0e-5 &&
-         surface_error.maximum <= 1.0e-4 && surface_error.relative_l2 <= 1.0e-4 &&
-         final_dense_error.maximum <= 1.0e-4 && final_dense_error.relative_l2 <= 1.0e-4 &&
-         binding_error.maximum <= 1.0e-4 && binding_error.relative_l2 <= 1.0e-4 &&
-         animated_error.maximum <= 1.0e-4 && animated_error.relative_l2 <= 1.0e-5 &&
-         exact_fraction >= 1.0 && slot_fraction >= 1.0) :
+            sampled_error.maximum <= 2.0e-4 && sampled_error.relative_l2 <= 2.0e-5 &&
+            surface_error.maximum <= 1.0e-4 && surface_error.relative_l2 <= 1.0e-4 &&
+            final_dense_error.maximum <= 1.0e-4 && final_dense_error.relative_l2 <= 1.0e-4 &&
+            binding_error.maximum <= 1.0e-4 && binding_error.relative_l2 <= 1.0e-4 &&
+            animated_error.maximum <= 1.0e-4 && animated_error.relative_l2 <= 1.0e-5 &&
+            exact_fraction >= 1.0 && slot_fraction >= 1.0) :
         (condition_error.maximum <= 1.0e-4 && condition_error.relative_l2 <= 3.0e-4 &&
-         sampled_error.maximum <= 1.6e-2 && sampled_error.relative_l2 <= 1.2e-3 &&
-         surface_error.maximum <= 1.0e-4 && surface_error.relative_l2 <= 1.0e-4 &&
-         final_dense_error.maximum <= 2.0e-2 && final_dense_error.relative_l2 <= 2.0e-3 &&
-         binding_error.maximum <= 0.26 && binding_error.relative_l2 <= 1.0e-2 &&
-         animated_error.maximum <= 0.16 && animated_error.relative_l2 <= 1.0e-3 &&
-         exact_fraction >= 0.995 && slot_fraction >= 0.999);
+            sampled_error.maximum <= 1.6e-2 && sampled_error.relative_l2 <= 1.2e-3 &&
+            surface_error.maximum <= 1.0e-4 && surface_error.relative_l2 <= 1.0e-4 &&
+            final_dense_error.maximum <= 2.0e-2 && final_dense_error.relative_l2 <= 2.0e-3 &&
+            binding_error.maximum <= 0.26 && binding_error.relative_l2 <= 1.0e-2 &&
+            animated_error.maximum <= 0.16 && animated_error.relative_l2 <= 1.0e-3 &&
+            exact_fraction >= 0.995 && slot_fraction >= 0.999);
     std::cout << "result=" << (passed ? "PASS" : "FAIL") << '\n';
     return passed ? 0 : 1;
-} catch (const std::exception & exception) {
+} catch (const std::exception &exception) {
     std::cerr << "full binding parity: " << exception.what() << '\n';
     return 2;
 }

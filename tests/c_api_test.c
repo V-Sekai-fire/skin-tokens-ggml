@@ -18,7 +18,7 @@ int main(void) {
     assert(ST_FIT_GLOBAL_SIMILARITY == 1);
     assert(ST_FIT_ARTICULATED == 2);
     char error[12] = {0};
-    st_model *model = (st_model *)(uintptr_t)1;
+    st_model *model = (st_model *) (uintptr_t) 1;
     const st_status result = st_model_load(NULL, NULL, &model, error, sizeof(error));
     assert(result == ST_INVALID_ARGUMENT);
     assert(model == NULL);
@@ -27,7 +27,7 @@ int main(void) {
     assert(strcmp(st_model_backend_name(NULL), "") == 0);
     assert(strlen(st_model_last_error(NULL)) > 0U);
     assert(st_bind_files(NULL, NULL, NULL, NULL, NULL, NULL,
-                         error, sizeof(error)) == ST_INVALID_ARGUMENT);
+               error, sizeof(error)) == ST_INVALID_ARGUMENT);
     st_mesh_info mesh = {7U, 9U};
     assert(st_inspect_mesh_file(NULL, &mesh, error, sizeof(error)) == ST_INVALID_ARGUMENT);
     assert(mesh.vertex_count == 0U && mesh.triangle_count == 0U);
@@ -39,7 +39,7 @@ int main(void) {
     assert(glb.has_mesh == 0 && glb.has_skeleton == 0 && glb.joint_count == 0U);
     assert(st_rig_file(NULL, NULL, NULL, NULL, NULL, error, sizeof(error)) == ST_INVALID_ARGUMENT);
     assert(st_skin_files(NULL, NULL, NULL, NULL, 0, NULL, NULL,
-                         error, sizeof(error)) == ST_INVALID_ARGUMENT);
+               error, sizeof(error)) == ST_INVALID_ARGUMENT);
     st_retarget_options *retarget = NULL;
     assert(st_retarget_options_create(&retarget, error, sizeof(error)) == ST_OK);
     assert(retarget != NULL);
@@ -47,42 +47,46 @@ int main(void) {
     int boolean = 0;
     st_finger_transfer fingers = 99U;
     assert(st_retarget_options_get_minimum_confidence(
-        retarget, &confidence, error, sizeof(error)) == ST_OK);
+               retarget, &confidence, error, sizeof(error)) == ST_OK);
     assert(confidence == 0.8F);
     assert(st_retarget_options_set_minimum_confidence(
-        retarget, 0.65F, error, sizeof(error)) == ST_OK);
+               retarget, 0.65F, error, sizeof(error)) == ST_OK);
     assert(st_retarget_options_get_minimum_confidence(
-        retarget, &confidence, error, sizeof(error)) == ST_OK && confidence == 0.65F);
+               retarget, &confidence, error, sizeof(error)) == ST_OK &&
+        confidence == 0.65F);
     assert(st_retarget_options_set_minimum_confidence(
-        retarget, 2.0F, error, sizeof(error)) == ST_INVALID_ARGUMENT);
+               retarget, 2.0F, error, sizeof(error)) == ST_INVALID_ARGUMENT);
     assert(st_retarget_options_get_allow_flexible_hands(
-        retarget, &boolean, error, sizeof(error)) == ST_OK && boolean == 1);
+               retarget, &boolean, error, sizeof(error)) == ST_OK &&
+        boolean == 1);
     assert(st_retarget_options_set_allow_flexible_hands(
-        retarget, 0, error, sizeof(error)) == ST_OK);
+               retarget, 0, error, sizeof(error)) == ST_OK);
     assert(st_retarget_options_get_allow_flexible_hands(
-        retarget, &boolean, error, sizeof(error)) == ST_OK && boolean == 0);
+               retarget, &boolean, error, sizeof(error)) == ST_OK &&
+        boolean == 0);
     assert(st_retarget_options_set_finger_transfer(
-        retarget, ST_FINGER_TRANSFER_MAP_SOMA_ENDPOINTS, error, sizeof(error)) == ST_OK);
+               retarget, ST_FINGER_TRANSFER_MAP_SOMA_ENDPOINTS, error, sizeof(error)) == ST_OK);
     assert(st_retarget_options_get_finger_transfer(
-        retarget, &fingers, error, sizeof(error)) == ST_OK &&
+               retarget, &fingers, error, sizeof(error)) == ST_OK &&
         fingers == ST_FINGER_TRANSFER_MAP_SOMA_ENDPOINTS);
     assert(st_retarget_options_set_scale_root_motion(
-        retarget, 0, error, sizeof(error)) == ST_OK);
+               retarget, 0, error, sizeof(error)) == ST_OK);
     assert(st_retarget_options_get_scale_root_motion(
-        retarget, &boolean, error, sizeof(error)) == ST_OK && boolean == 0);
+               retarget, &boolean, error, sizeof(error)) == ST_OK &&
+        boolean == 0);
     assert(st_humanoid_match_get_confidence(NULL, &confidence, error, sizeof(error)) ==
-           ST_INVALID_ARGUMENT);
+        ST_INVALID_ARGUMENT);
     uint64_t joint_count = 0U;
     st_semantic_role role = ST_ROLE_UNMAPPED;
     int64_t target_joint = -1;
     assert(st_humanoid_match_get_generated_joint_count(
-        NULL, &joint_count, error, sizeof(error)) == ST_INVALID_ARGUMENT);
+               NULL, &joint_count, error, sizeof(error)) == ST_INVALID_ARGUMENT);
     assert(st_humanoid_match_get_generated_joint_role(
-        NULL, 0U, &role, error, sizeof(error)) == ST_INVALID_ARGUMENT);
+               NULL, 0U, &role, error, sizeof(error)) == ST_INVALID_ARGUMENT);
     assert(st_humanoid_match_get_soma30_target_joint(
-        NULL, 0U, &target_joint, error, sizeof(error)) == ST_INVALID_ARGUMENT);
+               NULL, 0U, &target_joint, error, sizeof(error)) == ST_INVALID_ARGUMENT);
     assert(st_retarget_soma30_glb_files(
-        NULL, NULL, NULL, NULL, retarget, error, sizeof(error)) == ST_INVALID_ARGUMENT);
+               NULL, NULL, NULL, NULL, retarget, error, sizeof(error)) == ST_INVALID_ARGUMENT);
     st_retarget_options_free(retarget);
     st_retarget_options_free(NULL);
     st_humanoid_match_free(NULL);

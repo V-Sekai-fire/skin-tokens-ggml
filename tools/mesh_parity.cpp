@@ -7,7 +7,7 @@
 
 namespace {
 
-std::vector<float> read_values(const std::filesystem::path & path) {
+std::vector<float> read_values(const std::filesystem::path &path) {
     std::ifstream stream(path, std::ios::binary | std::ios::ate);
     if (!stream) throw std::runtime_error("cannot open fixture: " + path.string());
     const auto size = stream.tellg();
@@ -27,8 +27,8 @@ skintokens::device_kind parse_device(std::string_view value) {
     throw std::runtime_error("device must be auto, cpu, or vulkan");
 }
 
-bool compare(std::string_view name, const std::vector<float> & actual,
-             const std::vector<float> & expected) {
+bool compare(std::string_view name, const std::vector<float> &actual,
+    const std::vector<float> &expected) {
     if (actual.size() != expected.size())
         throw std::runtime_error(std::string{name} + " fixture size mismatch");
     double numerator = 0.0;
@@ -49,7 +49,7 @@ bool compare(std::string_view name, const std::vector<float> & actual,
 
 } // namespace
 
-int main(int argc, char ** argv) try {
+int main(int argc, char **argv) try {
     if (argc != 4) {
         std::cerr << "usage: skintokens-mesh-parity MODEL_DIR FIXTURE_DIR auto|cpu|vulkan\n";
         return 2;
@@ -68,17 +68,18 @@ int main(int argc, char ** argv) try {
         **weights, (*backend)->value, points, normals);
     if (!actual) throw std::runtime_error(actual.error().message);
     bool passed = true;
-    constexpr const char * names[]{"embedded", "projected", "cross", "self_01", "self_02",
-                                    "self_03", "self_04", "self_05", "self_06", "self_07",
-                                    "self_08", "ln_post", "output"};
-    for (const char * name : names) {
+    constexpr const char *names[]{"embedded", "projected", "cross", "self_01", "self_02",
+        "self_03", "self_04", "self_05", "self_06", "self_07",
+        "self_08", "ln_post", "output"};
+    for (const char *name : names) {
         const auto found = actual->find(name);
         if (found == actual->end()) throw std::runtime_error(std::string{"missing snapshot: "} + name);
         passed = compare(name, found->second,
-                         read_values(fixtures / (std::string{"mesh-encoder-"} + name + ".f32"))) && passed;
+                     read_values(fixtures / (std::string{"mesh-encoder-"} + name + ".f32"))) &&
+            passed;
     }
     return passed ? 0 : 1;
-} catch (const std::exception & exception) {
+} catch (const std::exception &exception) {
     std::cerr << exception.what() << '\n';
     return 1;
 }

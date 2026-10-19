@@ -17,7 +17,7 @@
 
 namespace {
 
-const std::filesystem::path & input_path() {
+const std::filesystem::path &input_path() {
     static const auto value = std::filesystem::temp_directory_path() /
         ("skintokens-c-api-fuzzer-" + std::to_string(ST_GETPID()) + ".glb");
     return value;
@@ -25,9 +25,9 @@ const std::filesystem::path & input_path() {
 
 } // namespace
 
-extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t * data, std::size_t size) {
+extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) {
     if (size > (2U << 20U)) return 0;
-    const auto & path = input_path();
+    const auto &path = input_path();
     {
         std::ofstream output(path, std::ios::binary | std::ios::trunc);
         if (!output) return 0;
@@ -46,17 +46,17 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t * data, std::size_t siz
     // Exercise nullability and fixed-buffer behavior across the remaining C
     // surface. GGUF/model loading is deliberately outside this fuzz target.
     (void) st_inspect_mesh_file(path.string().c_str(), nullptr,
-                                capacity == 0U ? nullptr : error.data(), capacity);
+        capacity == 0U ? nullptr : error.data(), capacity);
     (void) st_inspect_motion_glb_file(nullptr, &motion,
-                                      capacity == 0U ? nullptr : error.data(), capacity);
+        capacity == 0U ? nullptr : error.data(), capacity);
     (void) st_bind_files(nullptr, path.string().c_str(), path.string().c_str(),
-                         path.string().c_str(), nullptr, nullptr,
-                         capacity == 0U ? nullptr : error.data(), capacity);
+        path.string().c_str(), nullptr, nullptr,
+        capacity == 0U ? nullptr : error.data(), capacity);
     (void) st_rig_file(nullptr, path.string().c_str(), path.string().c_str(), nullptr, nullptr,
-                       capacity == 0U ? nullptr : error.data(), capacity);
+        capacity == 0U ? nullptr : error.data(), capacity);
     (void) st_skin_files(nullptr, path.string().c_str(), path.string().c_str(),
-                         path.string().c_str(), 0, nullptr, nullptr,
-                         capacity == 0U ? nullptr : error.data(), capacity);
+        path.string().c_str(), 0, nullptr, nullptr,
+        capacity == 0U ? nullptr : error.data(), capacity);
     st_retarget_options *options = nullptr;
     (void) st_retarget_options_create(&options,
         capacity == 0U ? nullptr : error.data(), capacity);

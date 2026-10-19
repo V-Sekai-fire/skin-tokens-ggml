@@ -15,7 +15,8 @@
 namespace {
 using json = nlohmann::json;
 
-template<class T> void append(std::vector<std::byte> & output, const T & value) {
+template<class T>
+void append(std::vector<std::byte> &output, const T &value) {
     const auto offset = output.size();
     output.resize(offset + sizeof(T));
     std::memcpy(output.data() + offset, &value, sizeof(T));
@@ -25,34 +26,37 @@ std::vector<std::byte> pack(std::string text, std::vector<std::byte> binary) {
     while (text.size() % 4U) text.push_back(' ');
     while (binary.size() % 4U) binary.push_back(std::byte{});
     std::vector<std::byte> out;
-    append(out, 0x46546C67U); append(out, 2U);
+    append(out, 0x46546C67U);
+    append(out, 2U);
     append(out, static_cast<std::uint32_t>(12U + 8U + text.size() + 8U + binary.size()));
-    append(out, static_cast<std::uint32_t>(text.size())); append(out, 0x4E4F534AU);
+    append(out, static_cast<std::uint32_t>(text.size()));
+    append(out, 0x4E4F534AU);
     for (char c : text) out.push_back(static_cast<std::byte>(c));
-    append(out, static_cast<std::uint32_t>(binary.size())); append(out, 0x004E4942U);
+    append(out, static_cast<std::uint32_t>(binary.size()));
+    append(out, 0x004E4942U);
     out.insert(out.end(), binary.begin(), binary.end());
     return out;
 }
 
-json read_json(const std::vector<std::byte> & glb) {
+json read_json(const std::vector<std::byte> &glb) {
     std::uint32_t size = 0;
     std::memcpy(&size, glb.data() + 12, 4);
-    const auto * begin = reinterpret_cast<const char *>(glb.data() + 20);
+    const auto *begin = reinterpret_cast<const char *>(glb.data() + 20);
     return json::parse(begin, begin + size);
 }
 
 // Mesh 0: two triangles, two materials, NORMAL + TEXCOORD_0, placed twice (mirrored and plain).
 // Mesh 1: a triangle without indices, which the rig skips. One embedded image.
 std::vector<std::byte> fixture() {
-    const float positions[] = {0,0,0, 1,0,0, 0,1,0,  0,0,1, 1,0,1, 0,1,1};
-    const float normals[] = {1,0,0, 1,0,0, 1,0,0,  0,0,1, 0,0,1, 0,0,1};
-    const float uvs[] = {0,0, 1,0, 0,1,  0,0, 1,0, 0,1};
-    const std::uint16_t indices[] = {0,1,2};
+    const float positions[] = {0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1};
+    const float normals[] = {1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1};
+    const float uvs[] = {0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1};
+    const std::uint16_t indices[] = {0, 1, 2};
     std::vector<std::byte> bin;
-    for (float v : positions) append(bin, v);   // 0..72
-    for (float v : normals) append(bin, v);     // 72..144
-    for (float v : uvs) append(bin, v);         // 144..192
-    for (auto v : indices) append(bin, v);      // 192..198
+    for (float v : positions) append(bin, v); // 0..72
+    for (float v : normals) append(bin, v); // 72..144
+    for (float v : uvs) append(bin, v); // 144..192
+    for (auto v : indices) append(bin, v); // 192..198
     while (bin.size() % 4U) bin.push_back(std::byte{});
     for (int i = 0; i < 8; ++i) bin.push_back(std::byte{0x89}); // 200..208 image bytes
     const std::string text = R"({"asset":{"version":"2.0","generator":"fixture"},"scene":0,
@@ -79,7 +83,13 @@ std::vector<std::byte> fixture() {
     return pack(text, bin);
 }
 
-#define CHECK(cond) do { if (!(cond)) { std::fprintf(stderr, "FAIL %s:%d %s\n", __FILE__, __LINE__, #cond); return 1; } } while (0)
+#define CHECK(cond)                                                             \
+    do {                                                                        \
+        if (!(cond)) {                                                          \
+            std::fprintf(stderr, "FAIL %s:%d %s\n", __FILE__, __LINE__, #cond); \
+            return 1;                                                           \
+        }                                                                       \
+    } while (0)
 } // namespace
 
 int main() {
@@ -100,7 +110,10 @@ int main() {
     rest.local_rotations.assign(binding.rig.names.size(), {});
 
     auto out = skintokens::save_rigged_source_glb_memory(source, binding, rest);
-    if (!out) { std::fprintf(stderr, "writer: %s\n", out.error().message.c_str()); return 1; }
+    if (!out) {
+        std::fprintf(stderr, "writer: %s\n", out.error().message.c_str());
+        return 1;
+    }
     const json root = read_json(*out);
 
     // Materials, textures and images stay; every skinned primitive keeps its material and UVs.
@@ -108,14 +121,14 @@ int main() {
     CHECK(root["textures"].size() == 1U && root["images"].size() == 1U);
     CHECK(root["asset"]["generator"] == "fixture");
     std::size_t skinned = 0;
-    for (const auto & node : root["nodes"]) {
+    for (const auto &node : root["nodes"]) {
         if (!node.contains("skin")) continue;
         ++skinned;
         CHECK(node["skin"] == 0);
-        const auto & primitives = root["meshes"][node["mesh"].get<std::size_t>()]["primitives"];
+        const auto &primitives = root["meshes"][node["mesh"].get<std::size_t>()]["primitives"];
         CHECK(primitives.size() == 2U);
         CHECK(primitives[0]["material"] == 0 && primitives[1]["material"] == 1);
-        for (const auto & primitive : primitives) {
+        for (const auto &primitive : primitives) {
             CHECK(primitive["attributes"].contains("TEXCOORD_0"));
             CHECK(primitive["attributes"].contains("JOINTS_0") && primitive["attributes"].contains("WEIGHTS_0"));
         }
@@ -126,10 +139,10 @@ int main() {
             if (root["nodes"][i].value("name", "") == name && root["nodes"][i].contains("skin") == skinned) return i;
         return root["nodes"].size();
     };
-    for (const auto & node : root["nodes"])  // an emptied source node keeps no mesh (or is gone)
+    for (const auto &node : root["nodes"]) // an emptied source node keeps no mesh (or is gone)
         if (!node.contains("skin") && (node.value("name", "") == "Left" || node.value("name", "") == "Right"))
             CHECK(!node.contains("mesh"));
-    CHECK(root["nodes"][named("Loose", false)]["mesh"] == 1);  // the skipped primitive stays where it was
+    CHECK(root["nodes"][named("Loose", false)]["mesh"] == 1); // the skipped primitive stays where it was
     CHECK(root["animations"].size() == 1U && root["animations"][0]["name"] == "RESET");
     CHECK(root["skins"][0]["joints"].size() == 2U);
 
@@ -138,18 +151,18 @@ int main() {
     CHECK(again && again->vertices.size() == geometry->vertices.size() && again->faces.size() == geometry->faces.size());
     for (std::size_t i = 0; i < geometry->vertices.size(); ++i) {
         CHECK(again->vertices[i].x == geometry->vertices[i].x && again->vertices[i].y == geometry->vertices[i].y &&
-              again->vertices[i].z == geometry->vertices[i].z);
+            again->vertices[i].z == geometry->vertices[i].z);
     }
     CHECK(again->faces == geometry->faces);
 
     // The mirrored copy's normal (1,0,0) goes through the inverse transpose: (-1,0,0).
     {
-        const auto & primitive = root["meshes"][root["nodes"][named("Left", true)]["mesh"].get<std::size_t>()]["primitives"][0];
-        const auto & accessor = root["accessors"][primitive["attributes"]["NORMAL"].get<std::size_t>()];
-        const auto & view = root["bufferViews"][accessor["bufferView"].get<std::size_t>()];
+        const auto &primitive = root["meshes"][root["nodes"][named("Left", true)]["mesh"].get<std::size_t>()]["primitives"][0];
+        const auto &accessor = root["accessors"][primitive["attributes"]["NORMAL"].get<std::size_t>()];
+        const auto &view = root["bufferViews"][accessor["bufferView"].get<std::size_t>()];
         std::uint32_t json_size = 0;
         std::memcpy(&json_size, out->data() + 12, 4);
-        const std::byte * bin = out->data() + 20 + json_size + 8;
+        const std::byte *bin = out->data() + 20 + json_size + 8;
         float n[3];
         std::memcpy(n, bin + view["byteOffset"].get<std::size_t>(), sizeof(n));
         CHECK(std::abs(n[0] + 1.0F) < 1e-6F && std::abs(n[1]) < 1e-6F && std::abs(n[2]) < 1e-6F);
@@ -166,13 +179,16 @@ int main() {
     // to it keeps the materials and the RESET clip.
     {
         const auto path = std::filesystem::temp_directory_path() / "skintokens-source-glb-test.glb";
-        std::FILE * file = std::fopen(path.string().c_str(), "wb");
+        std::FILE *file = std::fopen(path.string().c_str(), "wb");
         CHECK(file != nullptr);
         std::fwrite(out->data(), 1, out->size(), file);
         std::fclose(file);
         auto asset = skintokens::load_skinned_glb_file(path);
         std::filesystem::remove(path);
-        if (!asset) { std::fprintf(stderr, "reload: %s\n", asset.error().message.c_str()); return 1; }
+        if (!asset) {
+            std::fprintf(stderr, "reload: %s\n", asset.error().message.c_str());
+            return 1;
+        }
         CHECK(asset->binding.joints.size() == geometry->vertices.size());
         CHECK(asset->binding.weights[0][0] > 0.74F && asset->binding.weights[0][0] < 0.76F);
         skintokens::motion walk = rest;
@@ -197,24 +213,24 @@ int main() {
         body.rig.names = {"Hips", "Spine", "Head", "LeftUpLeg", "LeftLeg", "LeftFoot", "LeftToe", "LeftArm", "LeftHand"};
         body.rig.parents = {-1, 0, 1, 0, 3, 4, 5, 1, 7};
         body.rig.rest_positions = {{0, 1, 0}, {0, 1.2F, 0}, {0, 1.6F, 0}, {0.1F, 0.9F, 0}, {0.1F, 0.5F, 0},
-                                   {0.1F, 0.1F, 0}, {0.1F, 0, 0.15F}, {0.2F, 1.5F, 0}, {0.6F, 1.5F, 0}};
+            {0.1F, 0.1F, 0}, {0.1F, 0, 0.15F}, {0.2F, 1.5F, 0}, {0.6F, 1.5F, 0}};
         const auto frames = skintokens::joint_rest_frames(body.rig);
         CHECK(frames.size() == 9U);
         const auto turn = [](skintokens::quat q, skintokens::vec3 v) {
-            const float tx = 2*(q.y*v.z - q.z*v.y), ty = 2*(q.z*v.x - q.x*v.z), tz = 2*(q.x*v.y - q.y*v.x);
-            return skintokens::vec3{v.x + q.w*tx + (q.y*tz - q.z*ty), v.y + q.w*ty + (q.z*tx - q.x*tz),
-                                    v.z + q.w*tz + (q.x*ty - q.y*tx)};
+            const float tx = 2 * (q.y * v.z - q.z * v.y), ty = 2 * (q.z * v.x - q.x * v.z), tz = 2 * (q.x * v.y - q.y * v.x);
+            return skintokens::vec3{v.x + q.w * tx + (q.y * tz - q.z * ty), v.y + q.w * ty + (q.z * tx - q.x * tz),
+                v.z + q.w * tz + (q.x * ty - q.y * tx)};
         };
         const auto along = [&](std::size_t joint, std::size_t child) {
-            const auto & a = body.rig.rest_positions[joint];
-            const auto & c = body.rig.rest_positions[child];
-            const float dx = c.x - a.x, dy = c.y - a.y, dz = c.z - a.z, l = std::sqrt(dx*dx + dy*dy + dz*dz);
+            const auto &a = body.rig.rest_positions[joint];
+            const auto &c = body.rig.rest_positions[child];
+            const float dx = c.x - a.x, dy = c.y - a.y, dz = c.z - a.z, l = std::sqrt(dx * dx + dy * dy + dz * dz);
             const auto y = turn(frames[joint], {0, 1, 0});
-            return (y.x*dx + y.y*dy + y.z*dz) / l > 0.9999F;
+            return (y.x * dx + y.y * dy + y.z * dz) / l > 0.9999F;
         };
         CHECK(along(0, 1) && along(1, 2) && along(3, 4) && along(4, 5) && along(5, 6) && along(7, 8));
         const auto leg_forward = turn(frames[3], {0, 0, 1});
-        CHECK(leg_forward.z > 0.9999F);  // a leg turns down about the forward axis: forward stays +Z
+        CHECK(leg_forward.z > 0.9999F); // a leg turns down about the forward axis: forward stays +Z
         body.joints.assign(geometry->vertices.size(), {0, 0, 0, 0});
         body.weights.assign(geometry->vertices.size(), {1, 0, 0, 0});
         for (std::size_t v = 0; v < geometry->vertices.size(); ++v) body.joints[v][0] = static_cast<std::uint16_t>(v % 9U);
@@ -233,7 +249,7 @@ int main() {
         const json framed = read_json(*written);
         CHECK(framed["nodes"][framed["skins"][0]["joints"][3].get<std::size_t>()].contains("rotation"));
         const auto path = std::filesystem::temp_directory_path() / "skintokens-joint-frames-test.glb";
-        std::FILE * file = std::fopen(path.string().c_str(), "wb");
+        std::FILE *file = std::fopen(path.string().c_str(), "wb");
         CHECK(file != nullptr);
         std::fwrite(written->data(), 1, written->size(), file);
         std::fclose(file);
@@ -241,14 +257,17 @@ int main() {
         std::filesystem::remove(path);
         CHECK(back && back->frames == 2U && back->rig.names.size() == 9U);
         for (std::size_t j = 0; j < 9U; ++j) {
-            const auto & p = back->rig.rest_positions[j];
-            const auto & q = body.rig.rest_positions[j];
+            const auto &p = back->rig.rest_positions[j];
+            const auto &q = body.rig.rest_positions[j];
             CHECK(std::abs(p.x - q.x) < 1e-5F && std::abs(p.y - q.y) < 1e-5F && std::abs(p.z - q.z) < 1e-5F);
             for (std::size_t f = 0; f < 2U; ++f) {
-                const auto & r = back->local_rotations[f * 9U + j];
-                const auto & w = clip.local_rotations[f * 9U + j];
-                const float d = std::abs(r.x*w.x + r.y*w.y + r.z*w.z + r.w*w.w);
-                if (d < 0.99999F) { std::fprintf(stderr, "joint %zu frame %zu reads back %.6f\n", j, f, d); return 1; }
+                const auto &r = back->local_rotations[f * 9U + j];
+                const auto &w = clip.local_rotations[f * 9U + j];
+                const float d = std::abs(r.x * w.x + r.y * w.y + r.z * w.z + r.w * w.w);
+                if (d < 0.99999F) {
+                    std::fprintf(stderr, "joint %zu frame %zu reads back %.6f\n", j, f, d);
+                    return 1;
+                }
             }
         }
     }
@@ -257,15 +276,15 @@ int main() {
     // not by that node: glTF ignores a skinned mesh's node transform. The rig and the rigged file
     // must keep the source's up and forward.
     {
-        const float positions[] = {0,0,0, 1,0,0, 0,1,0};
-        const std::uint8_t joints[] = {0,0,0,0, 0,0,0,0, 0,0,0,0};
-        const float weights[] = {1,0,0,0, 1,0,0,0, 1,0,0,0};
-        const std::uint16_t indices[] = {0,1,2};
+        const float positions[] = {0, 0, 0, 1, 0, 0, 0, 1, 0};
+        const std::uint8_t joints[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+        const float weights[] = {1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0};
+        const std::uint16_t indices[] = {0, 1, 2};
         std::vector<std::byte> bin;
-        for (float v : positions) append(bin, v);   // 0..36
-        for (auto v : joints) append(bin, v);       // 36..48
-        for (float v : weights) append(bin, v);     // 48..96
-        for (auto v : indices) append(bin, v);      // 96..102
+        for (float v : positions) append(bin, v); // 0..36
+        for (auto v : joints) append(bin, v); // 36..48
+        for (float v : weights) append(bin, v); // 48..96
+        for (auto v : indices) append(bin, v); // 96..102
         const std::string text = R"({"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[0,2]}],
 "nodes":[{"name":"Sketchfab_model","matrix":[1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1],"children":[1]},
  {"name":"Body","mesh":0,"skin":0},{"name":"Bone"}],
@@ -280,7 +299,10 @@ int main() {
 "buffers":[{"byteLength":104}]})";
         const auto turned = pack(text, bin);
         auto placed = skintokens::load_glb_memory(turned);
-        if (!placed) { std::fprintf(stderr, "turned root: %s\n", placed.error().message.c_str()); return 1; }
+        if (!placed) {
+            std::fprintf(stderr, "turned root: %s\n", placed.error().message.c_str());
+            return 1;
+        }
         CHECK(placed->vertices.size() == 3U);
         const auto same = [](skintokens::vec3 a, float x, float y, float z) {
             return std::abs(a.x - x) < 1e-6F && std::abs(a.y - y) < 1e-6F && std::abs(a.z - z) < 1e-6F;
@@ -299,7 +321,10 @@ int main() {
         still.root_translations.assign(1U, one.rig.rest_positions.front());
         still.local_rotations.assign(1U, {});
         auto rigged = skintokens::save_rigged_source_glb_memory(turned, one, still);
-        if (!rigged) { std::fprintf(stderr, "turned writer: %s\n", rigged.error().message.c_str()); return 1; }
+        if (!rigged) {
+            std::fprintf(stderr, "turned writer: %s\n", rigged.error().message.c_str());
+            return 1;
+        }
         auto back = skintokens::load_glb_memory(*rigged);
         CHECK(back && back->vertices.size() == 3U && same(back->vertices[2], 0, 1, 0));
 
@@ -314,7 +339,10 @@ int main() {
             marked.replace(marked.find("[1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1]"), 37, std::string(matrix));
             marked.insert(1, "\"extensionsUsed\":[\"GODOT_single_root\"],");
             auto out = skintokens::save_rigged_source_glb_memory(pack(marked, bin), one, still);
-            if (!out) { std::fprintf(stderr, "single root writer: %s\n", out.error().message.c_str()); std::exit(1); }
+            if (!out) {
+                std::fprintf(stderr, "single root writer: %s\n", out.error().message.c_str());
+                std::exit(1);
+            }
             return read_json(*out);
         };
         const json turned_marked = single_root("[1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1]");
@@ -344,27 +372,37 @@ int main() {
  {"buffer":0,"byteOffset":48,"byteLength":48},{"buffer":0,"byteOffset":96,"byteLength":6}],
 "buffers":[{"byteLength":104}]})";
         auto pruned = skintokens::save_rigged_source_glb_memory(pack(old_rig, bin), one, still);
-        if (!pruned) { std::fprintf(stderr, "old rig writer: %s\n", pruned.error().message.c_str()); return 1; }
+        if (!pruned) {
+            std::fprintf(stderr, "old rig writer: %s\n", pruned.error().message.c_str());
+            return 1;
+        }
         const json p = read_json(*pruned);
-        const auto & nodes = p["nodes"];
+        const auto &nodes = p["nodes"];
         const auto find = [&](std::string_view name) {
             std::size_t hits = 0, at = 0;
             for (std::size_t i = 0; i < nodes.size(); ++i)
-                if (nodes[i].value("name", "") == name) { ++hits; at = i; }
+                if (nodes[i].value("name", "") == name) {
+                    ++hits;
+                    at = i;
+                }
             return hits == 1U ? at : nodes.size();
         };
-        CHECK(find("OldTwist") == nodes.size());          // an old joint with nothing below it
+        CHECK(find("OldTwist") == nodes.size()); // an old joint with nothing below it
         std::size_t bodies = 0;
-        for (const auto & node : nodes) if (node.value("name", "") == "Body") { ++bodies; CHECK(node.contains("skin")); }
-        CHECK(bodies == 1U);                               // the emptied mesh node went, the skinned one stays
+        for (const auto &node : nodes)
+            if (node.value("name", "") == "Body") {
+                ++bodies;
+                CHECK(node.contains("skin"));
+            }
+        CHECK(bodies == 1U); // the emptied mesh node went, the skinned one stays
         CHECK(find("Cam") < nodes.size() && find("Socket") < nodes.size() && find("OldHips") < nodes.size());
         CHECK(find("Anchored") < nodes.size() && p["extensions"]["EXT_test"]["node"] == find("Anchored"));
         CHECK(nodes[find("Socket")]["children"] == json::array({find("Cam")}));
-        CHECK(nodes.size() == 7U);   // Armature, OldHips, Socket, Cam, Anchored, Hips, Body
-        for (const auto & node : nodes)
-            for (const auto & child : node.value("children", json::array())) CHECK(child.get<std::size_t>() < nodes.size());
+        CHECK(nodes.size() == 7U); // Armature, OldHips, Socket, Cam, Anchored, Hips, Body
+        for (const auto &node : nodes)
+            for (const auto &child : node.value("children", json::array())) CHECK(child.get<std::size_t>() < nodes.size());
         CHECK(p["skins"][0]["joints"] == json::array({find("Hips")}) && p["skins"][0]["skeleton"] == find("Hips"));
-        for (const auto & channel : p["animations"][0]["channels"]) CHECK(channel["target"]["node"] == find("Hips"));
+        for (const auto &channel : p["animations"][0]["channels"]) CHECK(channel["target"]["node"] == find("Hips"));
         auto reread = skintokens::load_glb_memory(*pruned);
         CHECK(reread && reread->vertices.size() == 3U);
     }

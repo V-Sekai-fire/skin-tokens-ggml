@@ -19,19 +19,38 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     with safe_open(args.weights, framework="pt", device="cpu") as source:
-        weights = {name: source.get_tensor(name).float() for name in source.keys()
-                   if name.startswith(("mesh_encoder.", "output_proj."))}
+        weights = {
+            name: source.get_tensor(name).float()
+            for name in source.keys()
+            if name.startswith(("mesh_encoder.", "output_proj."))
+        }
+
     def w(name: str) -> torch.Tensor:
         return weights[name]
+
     def linear(x: torch.Tensor, stem: str) -> torch.Tensor:
         return F.linear(x, w(stem + ".weight"), weights.get(stem + ".bias"))
+
     def norm(x: torch.Tensor, stem: str) -> torch.Tensor:
-        return F.layer_norm(x, (x.shape[-1],), w(stem + ".weight"), w(stem + ".bias"), 1e-5)
-    def attention(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, heads: int = 8) -> torch.Tensor:
+        return F.layer_norm(
+            x, (x.shape[-1],), w(stem + ".weight"), w(stem + ".bias"), 1e-5
+        )
+
+    def attention(
+        q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, heads: int = 8
+    ) -> torch.Tensor:
         batch, query, _, dim = q.shape
-        q = q.transpose(1, 2); k = k.transpose(1, 2); v = v.transpose(1, 2)
+        q = q.transpose(1, 2)
+        k = k.transpose(1, 2)
+        v = v.transpose(1, 2)
         p = torch.softmax(torch.matmul(q, k.transpose(2, 3)) / np.sqrt(dim), dim=-1)
-        return torch.matmul(p, v).transpose(1, 2).contiguous().view(batch, query, heads * dim)
+        return (
+            torch.matmul(p, v)
+            .transpose(1, 2)
+            .contiguous()
+            .view(batch, query, heads * dim)
+        )
+
     def mlp(x: torch.Tensor, stem: str) -> torch.Tensor:
         return linear(F.gelu(linear(x, stem + ".c_fc")), stem + ".c_proj")
 
@@ -49,11 +68,17 @@ def main() -> None:
     stem = base + ".cross_attn"
     qn, dn = norm(query, stem + ".ln_1"), norm(projected, stem + ".ln_2")
     q = linear(qn, stem + ".attn.c_q").view(1, len(query_indices), 8, -1)
-    kv = linear(dn, stem + ".attn.c_kv").view(1, projected.shape[1], 8, -1); k, v = kv.chunk(2, dim=-1)
+    kv = linear(dn, stem + ".attn.c_kv").view(1, projected.shape[1], 8, -1)
+    k, v = kv.chunk(2, dim=-1)
     query = query + linear(attention(q, k, v), stem + ".attn.c_proj")
     query = query + mlp(norm(query, stem + ".ln_3"), stem + ".mlp")
-    captured = {"points": points, "normals": normals, "embedded": embedded,
-                "projected": projected, "cross": query}
+    captured = {
+        "points": points,
+        "normals": normals,
+        "embedded": embedded,
+        "projected": projected,
+        "cross": query,
+    }
     for index in range(8):
         stem = f"{base}.self_attn.resblocks.{index}"
         qkv = linear(norm(query, stem + ".ln_1"), stem + ".attn.c_qkv")
@@ -65,18 +90,28 @@ def main() -> None:
     captured["ln_post"] = query
     query = linear(query, "output_proj.0")
     # torch.nn.RMSNorm(eps=None) uses the input dtype's machine epsilon.
-    query = F.rms_norm(query, (896,), w("output_proj.1.weight"), eps=torch.finfo(query.dtype).eps)
+    query = F.rms_norm(
+        query, (896,), w("output_proj.1.weight"), eps=torch.finfo(query.dtype).eps
+    )
     captured["output"] = query
 
     args.output.mkdir(parents=True, exist_ok=True)
-    arrays = {name: value.detach().numpy().astype("<f4") for name, value in captured.items()}
+    arrays = {
+        name: value.detach().numpy().astype("<f4") for name, value in captured.items()
+    }
     np.savez(args.output / "mesh-encoder.npz", **arrays)
-    for name, value in arrays.items(): value.tofile(args.output / f"mesh-encoder-{name}.f32")
-    manifest = {"reference": "released Michelangelo encoder, direct PyTorch F32",
-                "query_indices": query_indices.tolist(),
-                "tensors": {name: list(value.shape) for name, value in arrays.items()}}
-    (args.output / "mesh-encoder.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    for name, value in arrays.items():
+        value.tofile(args.output / f"mesh-encoder-{name}.f32")
+    manifest = {
+        "reference": "released Michelangelo encoder, direct PyTorch F32",
+        "query_indices": query_indices.tolist(),
+        "tensors": {name: list(value.shape) for name, value in arrays.items()},
+    }
+    (args.output / "mesh-encoder.json").write_text(
+        json.dumps(manifest, indent=2) + "\n"
+    )
     print(json.dumps(manifest, indent=2))
 
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+    main()

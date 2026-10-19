@@ -24,17 +24,24 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     with safe_open(args.weights, framework="pt", device="cpu") as source:
-        weights = {name: source.get_tensor(name).float() for name in source.keys()
-                   if name.startswith("vae.model.")}
+        weights = {
+            name: source.get_tensor(name).float()
+            for name in source.keys()
+            if name.startswith("vae.model.")
+        }
 
     def w(name: str) -> torch.Tensor:
         return weights["vae.model." + name]
 
     def linear(x: torch.Tensor, stem: str) -> torch.Tensor:
-        return F.linear(x, w(stem + ".weight"), weights.get("vae.model." + stem + ".bias"))
+        return F.linear(
+            x, w(stem + ".weight"), weights.get("vae.model." + stem + ".bias")
+        )
 
     def norm(x: torch.Tensor, stem: str) -> torch.Tensor:
-        return F.layer_norm(x, (x.shape[-1],), w(stem + ".weight"), w(stem + ".bias"), 1e-5)
+        return F.layer_norm(
+            x, (x.shape[-1],), w(stem + ".weight"), w(stem + ".bias"), 1e-5
+        )
 
     def embedded(x: torch.Tensor) -> torch.Tensor:
         position, features = x[..., :3], x[..., 3:]
@@ -46,37 +53,61 @@ def main() -> None:
         phase *= torch.pi * 2.0
         frequency, phase = frequency.to(position.device), phase.to(position.device)
         angle = (position[..., None] * frequency).reshape(*position.shape[:-1], -1)
-        shifted = (position[..., None] * torch.pi * 0.5 + phase).reshape(*position.shape[:-1], -1)
-        position_embedding = torch.cat((position, angle.sin() + shifted.sin(),
-                                        angle.cos() + shifted.cos()), dim=-1)
+        shifted = (position[..., None] * torch.pi * 0.5 + phase).reshape(
+            *position.shape[:-1], -1
+        )
+        position_embedding = torch.cat(
+            (position, angle.sin() + shifted.sin(), angle.cos() + shifted.cos()), dim=-1
+        )
         return torch.cat((position_embedding, features), dim=-1)
 
-    def attention(query_input: torch.Tensor, data_input: torch.Tensor, stem: str,
-                  cross: bool) -> torch.Tensor:
+    def attention(
+        query_input: torch.Tensor, data_input: torch.Tensor, stem: str, cross: bool
+    ) -> torch.Tensor:
         heads, dim = 12, 64
         query = linear(query_input, stem + ".to_q")
         data = norm(data_input, stem + ".norm_cross") if cross else data_input
         key = linear(data, stem + ".to_k")
         value = linear(data, stem + ".to_v")
         if cross:
-            key, value = torch.cat((key, value), dim=-1).view(
-                1, key.shape[1], heads, dim * 2).split(dim, dim=-1)
+            key, value = (
+                torch.cat((key, value), dim=-1)
+                .view(1, key.shape[1], heads, dim * 2)
+                .split(dim, dim=-1)
+            )
             query = query.view(1, query.shape[1], heads, dim)
         else:
-            query, key, value = torch.cat((query, key, value), dim=-1).view(
-                1, query.shape[1], heads, dim * 3).split(dim, dim=-1)
-        probability = torch.softmax(torch.einsum("bqhd,bkhd->bhqk", query, key) / np.sqrt(dim), dim=-1)
-        result = torch.einsum("bhqk,bkhd->bqhd", probability, value).reshape(1, query.shape[1], heads * dim)
+            query, key, value = (
+                torch.cat((query, key, value), dim=-1)
+                .view(1, query.shape[1], heads, dim * 3)
+                .split(dim, dim=-1)
+            )
+        probability = torch.softmax(
+            torch.einsum("bqhd,bkhd->bhqk", query, key) / np.sqrt(dim), dim=-1
+        )
+        result = torch.einsum("bhqk,bkhd->bqhd", probability, value).reshape(
+            1, query.shape[1], heads * dim
+        )
         return linear(result, stem + ".to_out.0")
 
-    def block(state: torch.Tensor, stem: str, data: torch.Tensor | None = None) -> torch.Tensor:
+    def block(
+        state: torch.Tensor, stem: str, data: torch.Tensor | None = None
+    ) -> torch.Tensor:
         if data is None:
-            state = state + attention(norm(state, stem + ".norm1"),
-                                      norm(state, stem + ".norm1"), stem + ".attn1", False)
+            state = state + attention(
+                norm(state, stem + ".norm1"),
+                norm(state, stem + ".norm1"),
+                stem + ".attn1",
+                False,
+            )
         else:
-            state = state + attention(norm(state, stem + ".norm2"), data, stem + ".attn2", True)
-        ff = linear(F.gelu(linear(norm(state, stem + ".norm3"), stem + ".ff.net.0.proj")),
-                    stem + ".ff.net.2")
+            state = state + attention(
+                norm(state, stem + ".norm2"), data, stem + ".attn2", True
+            )
+        ff = linear(
+            F.gelu(linear(norm(state, stem + ".norm3"), stem + ".ff.net.0.proj")),
+            stem + ".ff.net.2",
+        )
         return state + ff
 
     generator = torch.Generator().manual_seed(20260826)
@@ -87,8 +118,12 @@ def main() -> None:
     query_indices = torch.tensor([0, 7, 13, 21, 32, 44, 55, 63])
     state = linear(condition_embedding[:, query_indices], "cond_encoder.proj_in")
     data = linear(condition_embedding, "cond_encoder.proj_in")
-    captured = {"points": points, "normals": normals, "condition_embedding": condition_embedding,
-                "cond_projected": data}
+    captured = {
+        "points": points,
+        "normals": normals,
+        "condition_embedding": condition_embedding,
+        "cond_projected": data,
+    }
     state = block(state, "cond_encoder.blocks.0", data)
     captured["cond_cross"] = state
     for layer in range(2):
@@ -117,13 +152,18 @@ def main() -> None:
     captured["output"] = logits
 
     args.output.mkdir(parents=True, exist_ok=True)
-    arrays = {name: value.detach().numpy().astype("<f4") for name, value in captured.items()}
+    arrays = {
+        name: value.detach().numpy().astype("<f4") for name, value in captured.items()
+    }
     np.savez(args.output / "skin-vae.npz", **arrays)
     for name, value in arrays.items():
         value.tofile(args.output / f"skin-vae-{name}.f32")
-    manifest = {"reference": "released SkinFSQCVAE, direct PyTorch F32",
-                "query_indices": query_indices.tolist(), "fsq_indices": indices[0].tolist(),
-                "tensors": {name: list(value.shape) for name, value in arrays.items()}}
+    manifest = {
+        "reference": "released SkinFSQCVAE, direct PyTorch F32",
+        "query_indices": query_indices.tolist(),
+        "fsq_indices": indices[0].tolist(),
+        "tensors": {name: list(value.shape) for name, value in arrays.items()},
+    }
     (args.output / "skin-vae.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(json.dumps(manifest, indent=2))
 

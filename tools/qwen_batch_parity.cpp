@@ -8,7 +8,7 @@
 
 namespace {
 template<class T>
-std::vector<T> read_values(const std::filesystem::path & path) {
+std::vector<T> read_values(const std::filesystem::path &path) {
     std::ifstream stream(path, std::ios::binary | std::ios::ate);
     if (!stream) throw std::runtime_error("cannot open " + path.string());
     const auto bytes = stream.tellg();
@@ -26,7 +26,7 @@ skintokens::device_kind device(std::string_view value) {
 }
 }
 
-int main(int argc, char ** argv) try {
+int main(int argc, char **argv) try {
     if (argc != 4) {
         std::cerr << "usage: skintokens-qwen-batch-parity MODEL_DIR FIXTURE_DIR cpu|vulkan\n";
         return 2;
@@ -41,7 +41,8 @@ int main(int argc, char ** argv) try {
     const auto fixture = std::filesystem::path{argv[2]};
     const auto full_condition = fixture / "mesh-condition.f32";
     const auto condition = read_values<float>(std::filesystem::exists(full_condition) ?
-        full_condition : fixture / "mesh-encoder-output.f32");
+            full_condition :
+            fixture / "mesh-encoder-output.f32");
     const auto full_prefix = fixture / "token-generation-prefix.i32";
     const std::vector<std::int32_t> first = std::filesystem::exists(full_prefix) ?
         read_values<std::int32_t>(full_prefix) :
@@ -71,11 +72,11 @@ int main(int argc, char ** argv) try {
         throw std::runtime_error("batched output shape mismatch");
     bool passed = true;
     const bool vulkan = std::string_view{argv[3]} == "vulkan";
-    const auto compare = [&](std::string_view label, const std::vector<float> & values,
+    const auto compare = [&](std::string_view label, const std::vector<float> &values,
                              double relative_limit, float maximum_limit) {
         bool result = true;
         for (std::size_t beam = 0; beam < 2U; ++beam) {
-            const auto & expected = beam == 0U ? *expected_first : *expected_second;
+            const auto &expected = beam == 0U ? *expected_first : *expected_second;
             double numerator = 0.0, denominator = 0.0;
             float maximum = 0.0F;
             for (std::size_t index = 0; index < vocabulary; ++index) {
@@ -98,9 +99,10 @@ int main(int argc, char ** argv) try {
     };
     passed = compare("batch", *actual, 1e-5, 1e-4F) && passed;
     passed = compare("kv_branch", *cached, vulkan ? 0.001 : 2e-5,
-                     vulkan ? 0.01F : 1e-4F) && passed;
+                 vulkan ? 0.01F : 1e-4F) &&
+        passed;
     return passed ? 0 : 1;
-} catch (const std::exception & exception) {
+} catch (const std::exception &exception) {
     std::cerr << exception.what() << '\n';
     return 1;
 }

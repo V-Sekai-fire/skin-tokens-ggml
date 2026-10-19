@@ -52,10 +52,11 @@ float length(vec3 a, vec3 b) {
 
 } // namespace
 
-int main(int argc, char ** argv) {
+int main(int argc, char **argv) {
     if (argc < 2) {
-        std::fprintf(stderr, "usage: skintokens-skin-stress RIGGED.glb [--seconds S] [--fps F]"
-                             " [--degrees A] [--seed N] [--tear R] [--floor F]\n");
+        std::fprintf(stderr,
+            "usage: skintokens-skin-stress RIGGED.glb [--seconds S] [--fps F]"
+            " [--degrees A] [--seed N] [--tear R] [--floor F]\n");
         return 2;
     }
     float seconds = 120.0F, fps = 30.0F, degrees = 60.0F, tear = 3.0F, floor_fraction = 0.005F;
@@ -69,12 +70,18 @@ int main(int argc, char ** argv) {
         else if (key == "--seed") seed = static_cast<unsigned>(value);
         else if (key == "--tear") tear = value;
         else if (key == "--floor") floor_fraction = value;
-        else { std::fprintf(stderr, "unknown option %s\n", argv[i]); return 2; }
+        else {
+            std::fprintf(stderr, "unknown option %s\n", argv[i]);
+            return 2;
+        }
     }
     auto asset = skintokens::load_skinned_glb_file(argv[1]);
-    if (!asset) { std::fprintf(stderr, "FAIL load: %s\n", asset.error().message.c_str()); return 1; }
-    const auto & geometry = asset->geometry;
-    const auto & binding = asset->binding;
+    if (!asset) {
+        std::fprintf(stderr, "FAIL load: %s\n", asset.error().message.c_str());
+        return 1;
+    }
+    const auto &geometry = asset->geometry;
+    const auto &binding = asset->binding;
     const std::size_t n = geometry.vertices.size();
     const std::size_t joints = binding.rig.names.size();
 
@@ -111,7 +118,7 @@ int main(int argc, char ** argv) {
         twins[it->second].push_back(static_cast<std::uint32_t>(v));
     }
     std::vector<std::pair<std::uint32_t, std::uint32_t>> edges;
-    for (const auto & f : geometry.faces)
+    for (const auto &f : geometry.faces)
         for (std::size_t k = 0; k < 3U; ++k) {
             auto a = f[k], b = f[(k + 1U) % 3U];
             if (welded[a] == welded[b]) continue;
@@ -126,14 +133,21 @@ int main(int argc, char ** argv) {
     // One ring per welded vertex (through one representative), for the spike test.
     const std::size_t wcount = twins.size();
     std::vector<std::vector<std::uint32_t>> ring(wcount);
-    for (const auto & [a, b] : edges) {
+    for (const auto &[a, b] : edges) {
         ring[welded[a]].push_back(twins[welded[b]][0]);
         ring[welded[b]].push_back(twins[welded[a]][0]);
     }
-    for (auto & list : ring) { std::sort(list.begin(), list.end()); list.erase(std::unique(list.begin(), list.end()), list.end()); }
-    const auto offset = [&](const std::vector<vec3> & p, std::size_t w) {
+    for (auto &list : ring) {
+        std::sort(list.begin(), list.end());
+        list.erase(std::unique(list.begin(), list.end()), list.end());
+    }
+    const auto offset = [&](const std::vector<vec3> &p, std::size_t w) {
         vec3 mean{0.0F, 0.0F, 0.0F};
-        for (const auto other : ring[w]) { mean.x += p[other].x; mean.y += p[other].y; mean.z += p[other].z; }
+        for (const auto other : ring[w]) {
+            mean.x += p[other].x;
+            mean.y += p[other].y;
+            mean.z += p[other].z;
+        }
         const float k = static_cast<float>(ring[w].size());
         mean = {mean.x / k, mean.y / k, mean.z / k};
         return length(p[twins[w][0]], mean);
@@ -143,7 +157,10 @@ int main(int argc, char ** argv) {
         std::vector<float> edge_sum(wcount, 0.0F);
         std::vector<float> edge_count(wcount, 0.0F);
         for (std::size_t e = 0; e < edges.size(); ++e) {
-            for (const auto v : {edges[e].first, edges[e].second}) { edge_sum[welded[v]] += rest[e]; edge_count[welded[v]] += 1.0F; }
+            for (const auto v : {edges[e].first, edges[e].second}) {
+                edge_sum[welded[v]] += rest[e];
+                edge_count[welded[v]] += 1.0F;
+            }
         }
         for (std::size_t w = 0; w < wcount; ++w)
             if (!ring[w].empty())
@@ -181,7 +198,10 @@ int main(int argc, char ** argv) {
     frame_max.reserve(clip.frames);
     for (std::size_t f = 0; f < clip.frames; ++f) {
         auto posed = skintokens::deform_vertices(geometry, binding, clip, f);
-        if (!posed) { std::fprintf(stderr, "FAIL frame %zu: %s\n", f, posed.error().message.c_str()); return 1; }
+        if (!posed) {
+            std::fprintf(stderr, "FAIL frame %zu: %s\n", f, posed.error().message.c_str());
+            return 1;
+        }
         float peak = 1.0F, spiked = 0.0F;
         for (std::size_t e = 0; e < edges.size(); ++e) {
             const auto [a, b] = edges[e];
@@ -194,11 +214,14 @@ int main(int argc, char ** argv) {
             if (ring[w].empty()) continue;
             const float ratio = offset(*posed, w) / rest_offset[w];
             spike[w] = std::max(spike[w], ratio);
-            if (ratio > tear) { for (const auto v : twins[w]) torn[v] = 1; spiked = std::max(spiked, ratio); }
+            if (ratio > tear) {
+                for (const auto v : twins[w]) torn[v] = 1;
+                spiked = std::max(spiked, ratio);
+            }
         }
         (void) peak;
         frame_max.push_back(spiked);
-        for (const auto & group : twins) {
+        for (const auto &group : twins) {
             for (std::size_t k = 1; k < group.size(); ++k) {
                 const float gap = length((*posed)[group[0]], (*posed)[group[k]]) / extent;
                 worst_crack = std::max(worst_crack, gap);
@@ -210,7 +233,10 @@ int main(int argc, char ** argv) {
     std::sort(sorted.begin(), sorted.end());
     const auto pct = [&](double q) { return sorted[static_cast<std::size_t>(q * static_cast<double>(n - 1U))]; };
     std::size_t torn_count = 0U, cracked_count = 0U, frames_torn = 0U;
-    for (std::size_t v = 0; v < n; ++v) { torn_count += torn[v]; cracked_count += cracked[v]; }
+    for (std::size_t v = 0; v < n; ++v) {
+        torn_count += torn[v];
+        cracked_count += cracked[v];
+    }
     for (const float value : frame_max) frames_torn += value > tear ? 1U : 0U;
     std::printf("STRESS file=%s vertices=%zu welded=%zu joints=%zu frames=%zu seconds=%.0f degrees=%.0f floor=%.3f\n",
         argv[1], n, twins.size(), joints, clip.frames, seconds, degrees, floor_fraction);
@@ -221,7 +247,7 @@ int main(int argc, char ** argv) {
     std::sort(spikes.begin(), spikes.end());
     const auto spct = [&](double q) { return spikes[static_cast<std::size_t>(q * static_cast<double>(wcount - 1U))]; };
     std::printf("STRESS spike p50=%.3f p99=%.3f p999=%.3f max=%.3f\n", spct(0.5), spct(0.99), spct(0.999), spikes.back());
-    if (const char * list = std::getenv("STRESS_LIST")) {
+    if (const char *list = std::getenv("STRESS_LIST")) {
         std::vector<std::uint32_t> order(wcount);
         std::iota(order.begin(), order.end(), 0U);
         std::sort(order.begin(), order.end(), [&](auto a, auto b) { return spike[a] > spike[b]; });

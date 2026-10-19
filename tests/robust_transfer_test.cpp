@@ -14,7 +14,7 @@ using skintokens::vec3;
 
 int failures = 0;
 
-void check(bool ok, const char * what) {
+void check(bool ok, const char *what) {
     std::printf("%s %s\n", ok ? "ok  " : "FAIL", what);
     if (!ok) ++failures;
 }
@@ -25,13 +25,13 @@ struct patch {
 };
 
 // A grid of rectangles in the plane z = 0, facing +z.
-void add_rect(patch & out, float x0, float y0, float w, float h, int cx, int cy) {
+void add_rect(patch &out, float x0, float y0, float w, float h, int cx, int cy) {
     const auto base = static_cast<std::uint32_t>(out.vertices.size());
     const int side = cx + 1;
     for (int j = 0; j <= cy; ++j)
         for (int i = 0; i <= cx; ++i) {
             out.vertices.push_back({x0 + w * static_cast<float>(i) / static_cast<float>(cx),
-                                    y0 + h * static_cast<float>(j) / static_cast<float>(cy), 0.0F});
+                y0 + h * static_cast<float>(j) / static_cast<float>(cy), 0.0F});
             out.normals.push_back({0.0F, 0.0F, 1.0F});
         }
     for (int j = 0; j < cy; ++j)
@@ -43,16 +43,16 @@ void add_rect(patch & out, float x0, float y0, float w, float h, int cx, int cy)
         }
 }
 
-void add_grid(patch & out, float x0, float y0, float size, int cells) {
+void add_grid(patch &out, float x0, float y0, float size, int cells) {
     add_rect(out, x0, y0, size, size, cells, cells);
 }
 
 // Samples at every face centre and three interior points per face, with the face
 // normal and the face index; `label(point, face)` gives the learned joint.
 template<class Label>
-void sample(const patch & mesh, std::size_t joints, Label label, std::vector<vec3> & points,
-            std::vector<vec3> & normals, std::vector<std::uint32_t> & faces,
-            std::vector<std::vector<float>> & dense) {
+void sample(const patch &mesh, std::size_t joints, Label label, std::vector<vec3> &points,
+    std::vector<vec3> &normals, std::vector<std::uint32_t> &faces,
+    std::vector<std::vector<float>> &dense) {
     dense.assign(joints, {});
     const auto add = [&](vec3 p, std::uint32_t face) {
         points.push_back(p);
@@ -62,7 +62,7 @@ void sample(const patch & mesh, std::size_t joints, Label label, std::vector<vec
         for (std::size_t j = 0; j < joints; ++j) dense[j].push_back(j == joint ? 1.0F : 0.0F);
     };
     for (std::uint32_t f = 0; f < mesh.faces.size(); ++f) {
-        const auto & t = mesh.faces[f];
+        const auto &t = mesh.faces[f];
         const auto a = mesh.vertices[t[0]], b = mesh.vertices[t[1]], c = mesh.vertices[t[2]];
         add({(a.x + b.x + c.x) / 3.0F, (a.y + b.y + c.y) / 3.0F, 0.0F}, f);
         const auto mix = [](vec3 p, vec3 q, vec3 r) {
@@ -84,7 +84,7 @@ skintokens::skeleton rig(std::size_t joints) {
     return out;
 }
 
-float weight_of(const skintokens::skin & s, std::size_t vertex, std::uint16_t joint) {
+float weight_of(const skintokens::skin &s, std::size_t vertex, std::uint16_t joint) {
     float total = 0.0F;
     for (std::size_t slot = 0; slot < 4U; ++slot)
         if (s.joints[vertex][slot] == joint) total += s.weights[vertex][slot];
@@ -111,7 +111,7 @@ int main() {
         const auto target = rig(2U);
         const auto raw = integrate_learned_binding(target, legs.vertices, points, dense);
         const auto robust = integrate_robust_binding(target, legs.vertices, legs.normals, legs.faces,
-                                                     points, normals, faces, dense);
+            points, normals, faces, dense);
         float raw_leak = 0.0F, robust_leak = 0.0F;
         for (std::size_t v = 0; v < legs.vertices.size(); ++v) {
             const auto wrong = static_cast<std::uint16_t>(v < left ? 1U : 0U);
@@ -140,7 +140,7 @@ int main() {
         const auto target = rig(2U);
         const auto raw = integrate_learned_binding(target, sheet.vertices, points, dense);
         const auto robust = integrate_robust_binding(target, sheet.vertices, sheet.normals, sheet.faces,
-                                                     points, normals, faces, dense);
+            points, normals, faces, dense);
         std::printf("     spike: raw %.3f, robust %.3f on joint 1, outliers %zu, inpainted %zu, iterations %zu\n",
             static_cast<double>(weight_of(raw, centre, 1U)), static_cast<double>(weight_of(robust, centre, 1U)),
             robust.transfer.outliers, robust.transfer.inpainted, robust.transfer.iterations);
@@ -152,7 +152,7 @@ int main() {
         no_outliers.support_share = 0.0F;
         no_outliers.smooth_iterations = 0U;
         const auto planted = integrate_robust_binding(target, sheet.vertices, sheet.normals, sheet.faces,
-                                                      points, normals, faces, dense, no_outliers);
+            points, normals, faces, dense, no_outliers);
         check(weight_of(planted, centre, 1U) > 0.5F, "plant: with the outlier test off the spike stays");
     }
 
@@ -161,20 +161,21 @@ int main() {
     // tells the fingers apart.
     {
         patch hand;
-        add_rect(hand, 0.0F, 0.2F, 0.45F, 0.8F, 9, 16);   // left finger, faces 0-287
-        add_rect(hand, 0.47F, 0.2F, 0.45F, 0.8F, 9, 16);  // right finger, faces 288-575
+        add_rect(hand, 0.0F, 0.2F, 0.45F, 0.8F, 9, 16); // left finger, faces 0-287
+        add_rect(hand, 0.47F, 0.2F, 0.45F, 0.8F, 9, 16); // right finger, faces 288-575
         add_rect(hand, 0.0F, 0.0F, 0.45F, 0.2F, 9, 4);
         add_rect(hand, 0.45F, 0.0F, 0.02F, 0.2F, 1, 4);
         add_rect(hand, 0.47F, 0.0F, 0.45F, 0.2F, 9, 4);
         std::vector<vec3> points, normals;
         std::vector<std::uint32_t> faces;
         std::vector<std::vector<float>> dense;
-        sample(hand, 3U, [](vec3, std::uint32_t face) { return face < 288U ? 1U : face < 576U ? 2U : 0U; },
-               points, normals, faces, dense);
+        sample(hand, 3U, [](vec3, std::uint32_t face) { return face < 288U ? 1U : face < 576U ? 2U :
+                                                                                                0U; },
+            points, normals, faces, dense);
         const auto target = rig(3U);
         const auto raw = integrate_learned_binding(target, hand.vertices, points, dense);
         const auto robust = integrate_robust_binding(target, hand.vertices, hand.normals, hand.faces,
-                                                     points, normals, faces, dense);
+            points, normals, faces, dense);
         float raw_leak = 0.0F, robust_leak = 0.0F;
         for (std::size_t v = 0; v < hand.vertices.size(); ++v) {
             const auto p = hand.vertices[v];
@@ -194,7 +195,7 @@ int main() {
         whole_part.geodesic_ratio = 1000.0F;
         whole_part.smooth_iterations = 0U;
         const auto planted = integrate_robust_binding(target, hand.vertices, hand.normals, hand.faces,
-                                                      points, normals, faces, dense, whole_part);
+            points, normals, faces, dense, whole_part);
         float planted_leak = 0.0F;
         for (std::size_t v = 0; v < hand.vertices.size(); ++v) {
             const auto p = hand.vertices[v];
@@ -212,16 +213,16 @@ int main() {
         const auto twin = static_cast<std::uint32_t>(sheet.vertices.size());
         sheet.vertices.push_back(sheet.vertices[12]);
         sheet.normals.push_back({0.0F, 0.0F, -1.0F});
-        for (auto & f : sheet.faces)
-            for (auto & corner : f)
+        for (auto &f : sheet.faces)
+            for (auto &corner : f)
                 if (corner == 12U && (&f - sheet.faces.data()) % 2 == 0) corner = twin;
         std::vector<vec3> points, normals;
         std::vector<std::uint32_t> faces;
         std::vector<std::vector<float>> dense;
         sample(sheet, 3U, [&](vec3 p, std::uint32_t) { return p.x < 0.5F ? 0U : (p.y < 0.5F ? 1U : 2U); },
-               points, normals, faces, dense);
+            points, normals, faces, dense);
         const auto robust = integrate_robust_binding(rig(3U), sheet.vertices, sheet.normals, sheet.faces,
-                                                     points, normals, faces, dense);
+            points, normals, faces, dense);
         bool same = robust.joints[12] == robust.joints[twin];
         for (std::size_t slot = 0; slot < 4U; ++slot)
             same = same && std::abs(robust.weights[12][slot] - robust.weights[twin][slot]) < 1.0e-7F;
@@ -238,18 +239,23 @@ int main() {
     // be crossed) and must keep them all.
     {
         patch scene;
-        add_grid(scene, 0.0F, 0.0F, 0.3F, 3);    // right shoe, faces 0-17
-        add_grid(scene, 0.5F, 0.0F, 0.3F, 3);    // left shoe, faces 18-35
-        add_grid(scene, 0.0F, 1.0F, 1.0F, 5);    // body, faces 36-85
+        add_grid(scene, 0.0F, 0.0F, 0.3F, 3); // right shoe, faces 0-17
+        add_grid(scene, 0.5F, 0.0F, 0.3F, 3); // left shoe, faces 18-35
+        add_grid(scene, 0.0F, 1.0F, 1.0F, 5); // body, faces 36-85
         std::vector<vec3> points, normals;
         std::vector<std::uint32_t> faces;
         std::vector<std::vector<float>> dense;
         sample(scene, 5U, [](vec3, std::uint32_t) { return 0U; }, points, normals, faces, dense);
         for (std::size_t i = 0; i < points.size(); ++i) {
-            for (auto & column : dense) column[i] = 0.0F;
-            if (faces[i] < 18U) { dense[2][i] = 0.7F; dense[4][i] = 0.3F; }
-            else if (faces[i] < 36U) { dense[4][i] = 1.0F; }
-            else { for (std::size_t j = 1; j < 5U; ++j) dense[j][i] = 0.25F; }  // bare hips joint 0
+            for (auto &column : dense) column[i] = 0.0F;
+            if (faces[i] < 18U) {
+                dense[2][i] = 0.7F;
+                dense[4][i] = 0.3F;
+            } else if (faces[i] < 36U) {
+                dense[4][i] = 1.0F;
+            } else {
+                for (std::size_t j = 1; j < 5U; ++j) dense[j][i] = 0.25F;
+            } // bare hips joint 0
         }
         skintokens::skeleton legs;
         const std::int32_t parents[]{-1, 0, 1, 0, 3};
@@ -259,11 +265,11 @@ int main() {
             legs.rest_positions.push_back({static_cast<float>(j), 0.0F, 0.0F});
         }
         const auto robust = integrate_robust_binding(legs, scene.vertices, scene.normals, scene.faces,
-                                                     points, normals, faces, dense);
+            points, normals, faces, dense);
         skintokens::detail::robust_transfer_options off;
         off.support_share = 0.0F;
         const auto planted = integrate_robust_binding(legs, scene.vertices, scene.normals, scene.faces,
-                                                      points, normals, faces, dense, off);
+            points, normals, faces, dense, off);
         float right_shoe_left_foot = 0.0F, planted_left_foot = 0.0F, body_min = 1.0F;
         for (std::size_t v = 0; v < 16U; ++v) {
             right_shoe_left_foot = std::max(right_shoe_left_foot, weight_of(robust, v, 4U));
@@ -284,12 +290,14 @@ int main() {
     // the hand (joint 2) carries a few percent of the vertices; both stay.
     {
         patch body;
-        add_grid(body, 0.0F, 0.0F, 1.0F, 20);   // 441 vertices, 800 faces
+        add_grid(body, 0.0F, 0.0F, 1.0F, 20); // 441 vertices, 800 faces
         std::vector<vec3> points, normals;
         std::vector<std::uint32_t> faces;
         std::vector<std::vector<float>> dense;
         sample(body, 4U, [](vec3 p, std::uint32_t) {
-            return p.x > 0.84F && p.y > 0.84F ? 3U : p.x > 0.69F && p.y > 0.69F ? 2U : p.x < 0.5F ? 0U : 1U;
+            return p.x > 0.84F && p.y > 0.84F ? 3U : p.x > 0.69F && p.y > 0.69F ? 2U :
+                p.x < 0.5F                                                      ? 0U :
+                                                                                  1U;
         }, points, normals, faces, dense);
         skintokens::skeleton arm;
         const std::int32_t parents[]{-1, 0, 1, 2};
@@ -299,15 +307,15 @@ int main() {
             arm.rest_positions.push_back({static_cast<float>(j), 0.0F, 0.0F});
         }
         const auto robust = integrate_robust_binding(arm, body.vertices, body.normals, body.faces,
-                                                     points, normals, faces, dense);
-        const std::size_t tip = body.vertices.size() - 1U;  // (1, 1)
+            points, normals, faces, dense);
+        const std::size_t tip = body.vertices.size() - 1U; // (1, 1)
         std::printf("     fingertip: tip weight %.3f on joint 3, trimmed parts %zu\n",
             static_cast<double>(weight_of(robust, tip, 3U)), robust.transfer.trimmed_parts);
         check(weight_of(robust, tip, 3U) > 0.5F, "robust: a fingertip on a whole-body part keeps its joint");
         skintokens::detail::robust_transfer_options coarse;
         coarse.support_share = 0.10F;
         const auto planted = integrate_robust_binding(arm, body.vertices, body.normals, body.faces,
-                                                      points, normals, faces, dense, coarse);
+            points, normals, faces, dense, coarse);
         check(robust.transfer.trimmed_parts == 0U, "robust: the whole body is not trimmed");
         check(planted.transfer.trimmed_parts == 1U, "plant: with a 10% share floor the body is trimmed");
     }
@@ -319,7 +327,7 @@ int main() {
     {
         patch sheet;
         add_grid(sheet, 0.0F, 0.0F, 1.0F, 10);
-        const std::size_t stray = 5U * 11U + 2U;  // (0.2, 0.5)
+        const std::size_t stray = 5U * 11U + 2U; // (0.2, 0.5)
         const auto c = sheet.vertices[stray];
         std::vector<vec3> points, normals;
         std::vector<std::uint32_t> faces;
@@ -332,9 +340,9 @@ int main() {
         auto unsmoothed = no_outlier;
         unsmoothed.smooth_iterations = 0U;
         const auto smoothed = integrate_robust_binding(rig(2U), sheet.vertices, sheet.normals, sheet.faces,
-                                                       points, normals, faces, dense, no_outlier);
+            points, normals, faces, dense, no_outlier);
         const auto planted = integrate_robust_binding(rig(2U), sheet.vertices, sheet.normals, sheet.faces,
-                                                      points, normals, faces, dense, unsmoothed);
+            points, normals, faces, dense, unsmoothed);
         std::printf("     smoothing: stray vertex on joint 1: %.3f smoothed, %.3f unsmoothed\n",
             static_cast<double>(weight_of(smoothed, stray, 1U)), static_cast<double>(weight_of(planted, stray, 1U)));
         check(weight_of(planted, stray, 1U) > 0.5F, "plant: without smoothing the stray vertex stays on joint 1");

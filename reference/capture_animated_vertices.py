@@ -19,8 +19,12 @@ import numpy as np
 
 
 COMPONENTS = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
-DTYPES = {5121: np.dtype("u1"), 5123: np.dtype("<u2"), 5125: np.dtype("<u4"),
-          5126: np.dtype("<f4")}
+DTYPES = {
+    5121: np.dtype("u1"),
+    5123: np.dtype("<u2"),
+    5125: np.dtype("<u4"),
+    5126: np.dtype("<f4"),
+}
 
 
 def read_glb(path: Path) -> tuple[dict, bytes]:
@@ -36,7 +40,7 @@ def read_glb(path: Path) -> tuple[dict, bytes]:
     while offset < len(data):
         length, kind = struct.unpack_from("<II", data, offset)
         offset += 8
-        chunk = data[offset:offset + length]
+        chunk = data[offset : offset + length]
         if len(chunk) != length:
             raise ValueError("truncated GLB chunk")
         offset += length
@@ -65,22 +69,32 @@ def accessor(root: dict, binary: bytes, index: int) -> np.ndarray:
     required = offset + (count - 1) * stride + packed if count else offset
     if required > len(binary):
         raise ValueError("accessor exceeds the GLB binary chunk")
-    value = np.ndarray((count, components), dtype=dtype, buffer=binary, offset=offset,
-                       strides=(stride, dtype.itemsize)).copy()
+    value = np.ndarray(
+        (count, components),
+        dtype=dtype,
+        buffer=binary,
+        offset=offset,
+        strides=(stride, dtype.itemsize),
+    ).copy()
     return value[:, 0] if components == 1 else value
 
 
 def quaternion_matrix(value: np.ndarray) -> np.ndarray:
     x, y, z, w = (float(component) for component in value)
-    length = x*x + y*y + z*z + w*w
+    length = x * x + y * y + z * z + w * w
     scale = 2.0 / length if length > 0.0 else 0.0
-    xx, yy, zz = x*x*scale, y*y*scale, z*z*scale
-    xy, xz, yz = x*y*scale, x*z*scale, y*z*scale
-    wx, wy, wz = w*x*scale, w*y*scale, w*z*scale
-    return np.array([[1-yy-zz, xy-wz, xz+wy, 0],
-                     [xy+wz, 1-xx-zz, yz-wx, 0],
-                     [xz-wy, yz+wx, 1-xx-yy, 0],
-                     [0, 0, 0, 1]], dtype=np.float64)
+    xx, yy, zz = x * x * scale, y * y * scale, z * z * scale
+    xy, xz, yz = x * y * scale, x * z * scale, y * z * scale
+    wx, wy, wz = w * x * scale, w * y * scale, w * z * scale
+    return np.array(
+        [
+            [1 - yy - zz, xy - wz, xz + wy, 0],
+            [xy + wz, 1 - xx - zz, yz - wx, 0],
+            [xz - wy, yz + wx, 1 - xx - yy, 0],
+            [0, 0, 0, 1],
+        ],
+        dtype=np.float64,
+    )
 
 
 def local_matrix(translation: np.ndarray, rotation: np.ndarray) -> np.ndarray:
@@ -93,8 +107,13 @@ def selected_frames(text: str | None, count: int) -> list[int]:
     if text:
         values = [int(value.strip()) for value in text.split(",") if value.strip()]
     else:
-        values = [0, round((count - 1) * .25), round((count - 1) * .5),
-                  round((count - 1) * .75), count - 1]
+        values = [
+            0,
+            round((count - 1) * 0.25),
+            round((count - 1) * 0.5),
+            round((count - 1) * 0.75),
+            count - 1,
+        ]
     values = list(dict.fromkeys(values))
     if not values or min(values) < 0 or max(values) >= count:
         raise ValueError("selected frame is outside the animation")
@@ -121,7 +140,9 @@ def main() -> None:
                 parents[node_to_joint[child_node]] = node_to_joint[parent_node]
     roots = np.flatnonzero(parents < 0)
     if roots.tolist() != [0]:
-        raise ValueError("the C++ exact-frame evaluator requires joint zero to be the sole root")
+        raise ValueError(
+            "the C++ exact-frame evaluator requires joint zero to be the sole root"
+        )
     for joint, parent in enumerate(parents):
         if parent >= joint:
             raise ValueError("skin joints are not in parent-before-child order")
@@ -137,11 +158,19 @@ def main() -> None:
     if "indices" not in primitive:
         raise ValueError("parity capture requires an indexed triangle mesh")
     faces = accessor(root, binary, primitive["indices"]).astype("<u4").reshape(-1, 3)
-    if positions.shape[1:] != (3,) or joints.shape != (len(positions), 4) or weights.shape != joints.shape:
+    if (
+        positions.shape[1:] != (3,)
+        or joints.shape != (len(positions), 4)
+        or weights.shape != joints.shape
+    ):
         raise ValueError("unexpected skinned vertex stream shape")
-    inverse_bind = accessor(root, binary, skin["inverseBindMatrices"]).astype(np.float64)
+    inverse_bind = accessor(root, binary, skin["inverseBindMatrices"]).astype(
+        np.float64
+    )
     inverse_bind = inverse_bind.reshape(joint_count, 4, 4).transpose(0, 2, 1)
-    rest_positions = np.stack([np.linalg.inv(value)[:3, 3] for value in inverse_bind]).astype("<f4")
+    rest_positions = np.stack(
+        [np.linalg.inv(value)[:3, 3] for value in inverse_bind]
+    ).astype("<f4")
 
     node_translations = np.zeros((joint_count, 3), dtype=np.float64)
     node_rotations = np.zeros((joint_count, 4), dtype=np.float64)
@@ -149,18 +178,25 @@ def main() -> None:
     for joint, node_index in enumerate(joint_nodes):
         node = root["nodes"][node_index]
         if "matrix" in node or "scale" in node:
-            raise ValueError("matrix/scale joint nodes are outside the exporter parity contract")
+            raise ValueError(
+                "matrix/scale joint nodes are outside the exporter parity contract"
+            )
         node_translations[joint] = node.get("translation", [0, 0, 0])
         node_rotations[joint] = node.get("rotation", [0, 0, 0, 1])
 
     animation = root["animations"][0]
     samplers = animation["samplers"]
     channels = animation["channels"]
-    time_arrays = [accessor(root, binary, sampler["input"]).astype(np.float64) for sampler in samplers]
+    time_arrays = [
+        accessor(root, binary, sampler["input"]).astype(np.float64)
+        for sampler in samplers
+    ]
     frame_count = max(len(value) for value in time_arrays)
     if frame_count < 1:
         raise ValueError("animation contains no keyframes")
-    local_rotations = np.broadcast_to(node_rotations, (frame_count, joint_count, 4)).copy()
+    local_rotations = np.broadcast_to(
+        node_rotations, (frame_count, joint_count, 4)
+    ).copy()
     root_translations = np.broadcast_to(node_translations[0], (frame_count, 3)).copy()
     common_times = None
     for channel in channels:
@@ -183,22 +219,34 @@ def main() -> None:
             root_translations[:] = values
     if common_times is None:
         raise ValueError("animation contains no supported skin channels")
-    fps = float((frame_count - 1) / common_times[-1]) if frame_count > 1 and common_times[-1] > 0 else 30.0
+    fps = (
+        float((frame_count - 1) / common_times[-1])
+        if frame_count > 1 and common_times[-1] > 0
+        else 30.0
+    )
 
     frames = selected_frames(args.frames, frame_count)
-    homogeneous = np.concatenate((positions.astype(np.float64), np.ones((len(positions), 1))), axis=1)
+    homogeneous = np.concatenate(
+        (positions.astype(np.float64), np.ones((len(positions), 1))), axis=1
+    )
     expected = np.zeros((len(frames), len(positions), 3), dtype="<f4")
     for output_index, frame in enumerate(frames):
         globals_ = np.zeros((joint_count, 4, 4), dtype=np.float64)
         for joint in range(joint_count):
-            translation = root_translations[frame] if joint == 0 else node_translations[joint]
+            translation = (
+                root_translations[frame] if joint == 0 else node_translations[joint]
+            )
             local = local_matrix(translation, local_rotations[frame, joint])
-            globals_[joint] = local if parents[joint] < 0 else globals_[parents[joint]] @ local
+            globals_[joint] = (
+                local if parents[joint] < 0 else globals_[parents[joint]] @ local
+            )
         skin_matrices = globals_ @ inverse_bind
         result = np.zeros((len(positions), 3), dtype=np.float64)
         weight_sum = weights.astype(np.float64).sum(axis=1)
         for slot in range(4):
-            transformed = np.einsum("nij,nj->ni", skin_matrices[joints[:, slot]], homogeneous)[:, :3]
+            transformed = np.einsum(
+                "nij,nj->ni", skin_matrices[joints[:, slot]], homogeneous
+            )[:, :3]
             result += transformed * weights[:, slot, None]
         result /= np.maximum(weight_sum[:, None], 1.0e-30)
         expected[output_index] = result.astype("<f4")
@@ -227,7 +275,9 @@ def main() -> None:
         "max_abs_tolerance": 2.0e-5,
         "relative_l2_tolerance": 2.0e-6,
     }
-    (args.output / "animation-vertices.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    (args.output / "animation-vertices.json").write_text(
+        json.dumps(manifest, indent=2) + "\n"
+    )
     print(json.dumps(manifest, indent=2))
 
 

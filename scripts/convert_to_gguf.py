@@ -72,9 +72,15 @@ def compact_name(name: str) -> str:
         ("cross_attn.", "xattn."),
         ("input_layernorm.", "an."),
         ("post_attention_layernorm.", "fn."),
-        ("q_proj.", "q."), ("k_proj.", "k."), ("v_proj.", "v."),
-        ("o_proj.", "o."), ("gate_proj.", "g."), ("up_proj.", "u."),
-        ("down_proj.", "d."), ("weight", "w"), ("bias", "b"),
+        ("q_proj.", "q."),
+        ("k_proj.", "k."),
+        ("v_proj.", "v."),
+        ("o_proj.", "o."),
+        ("gate_proj.", "g."),
+        ("up_proj.", "u."),
+        ("down_proj.", "d."),
+        ("weight", "w"),
+        ("bias", "b"),
     )
     output = name
     for old, new in replacements:
@@ -114,9 +120,12 @@ class Tensor:
     @property
     def data(self) -> bytes:
         import torch
+
         if self.kind == BF16:
             if self.value.dtype != torch.bfloat16:
-                raise ValueError(f"{self.name} is {self.value.dtype}; BF16 output keeps BF16 sources only")
+                raise ValueError(
+                    f"{self.name} is {self.value.dtype}; BF16 output keeps BF16 sources only"
+                )
             return self.value.contiguous().view(torch.int16).numpy().tobytes(order="C")
         dtype = torch.float32 if self.kind == F32 else torch.float16
         return self.value.to(dtype=dtype).contiguous().numpy().tobytes(order="C")
@@ -137,8 +146,15 @@ def load_tensors(path: Path) -> dict[str, object]:
     return result
 
 
-def write_component(path: Path, component: str, values: list[tuple[str, object]],
-                    config_json: str, tokenrig_hash: str, vae_hash: str, ftype: int) -> None:
+def write_component(
+    path: Path,
+    component: str,
+    values: list[tuple[str, object]],
+    config_json: str,
+    tokenrig_hash: str,
+    vae_hash: str,
+    ftype: int,
+) -> None:
     tensors: list[Tensor] = []
     offset = 0
     names: set[str] = set()
@@ -191,20 +207,39 @@ def write_component(path: Path, component: str, values: list[tuple[str, object]]
         stream.flush()
         os.fsync(stream.fileno())
     os.replace(temporary, path)
-    print(f"wrote {path} ({len(tensors)} tensors, {path.stat().st_size / (1 << 20):.1f} MiB)")
+    print(
+        f"wrote {path} ({len(tensors)} tensors, {path.stat().st_size / (1 << 20):.1f} MiB)"
+    )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--tokenrig", type=Path, required=True,
-                        help="verified TokenRig safetensors intermediate")
-    parser.add_argument("--skin-vae", type=Path, required=True,
-                        help="verified SkinVAE safetensors intermediate")
-    parser.add_argument("--config", type=Path, required=True,
-                        help="JSON emitted by the trusted extractor")
+    parser.add_argument(
+        "--tokenrig",
+        type=Path,
+        required=True,
+        help="verified TokenRig safetensors intermediate",
+    )
+    parser.add_argument(
+        "--skin-vae",
+        type=Path,
+        required=True,
+        help="verified SkinVAE safetensors intermediate",
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        required=True,
+        help="JSON emitted by the trusted extractor",
+    )
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--ftype", type=int, choices=(0, 1, 2), default=1,
-                        help="0 F32, 1 F16, 2 BF16 matrices as stored in the checkpoint")
+    parser.add_argument(
+        "--ftype",
+        type=int,
+        choices=(0, 1, 2),
+        default=1,
+        help="0 F32, 1 F16, 2 BF16 matrices as stored in the checkpoint",
+    )
     args = parser.parse_args()
 
     config = json.loads(args.config.read_text(encoding="utf-8"))
@@ -218,7 +253,9 @@ def main() -> None:
         combined.update({"vae." + name: value for name, value in vae.items()})
 
     grouped: dict[str, list[tuple[str, object]]] = {
-        "mesh-encoder": [], "tokenrig": [], "skin-vae": []
+        "mesh-encoder": [],
+        "tokenrig": [],
+        "skin-vae": [],
     }
     ignored: list[str] = []
     for name, value in combined.items():
@@ -231,13 +268,22 @@ def main() -> None:
         if not values:
             raise ValueError(f"no tensors found for required component {component}")
     if ignored:
-        raise ValueError("unclassified TokenRig tensors: " + ", ".join(sorted(ignored)[:20]))
+        raise ValueError(
+            "unclassified TokenRig tensors: " + ", ".join(sorted(ignored)[:20])
+        )
 
     tokenrig_hash = sha256(args.tokenrig)
     vae_hash = sha256(args.skin_vae)
     for component, values in grouped.items():
-        write_component(args.output / f"{component}.gguf", component, values,
-                        config_json, tokenrig_hash, vae_hash, args.ftype)
+        write_component(
+            args.output / f"{component}.gguf",
+            component,
+            values,
+            config_json,
+            tokenrig_hash,
+            vae_hash,
+            args.ftype,
+        )
 
 
 if __name__ == "__main__":

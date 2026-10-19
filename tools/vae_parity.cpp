@@ -7,7 +7,7 @@
 
 namespace {
 
-std::vector<float> read_values(const std::filesystem::path & path) {
+std::vector<float> read_values(const std::filesystem::path &path) {
     std::ifstream stream(path, std::ios::binary | std::ios::ate);
     if (!stream) throw std::runtime_error("cannot open fixture: " + path.string());
     const auto size = stream.tellg();
@@ -27,8 +27,8 @@ skintokens::device_kind parse_device(std::string_view value) {
     throw std::runtime_error("device must be auto, cpu, or vulkan");
 }
 
-bool compare(std::string_view name, const std::vector<float> & actual,
-             const std::vector<float> & expected) {
+bool compare(std::string_view name, const std::vector<float> &actual,
+    const std::vector<float> &expected) {
     if (actual.size() != expected.size())
         throw std::runtime_error(std::string{name} + " fixture size mismatch");
     double numerator = 0.0, denominator = 0.0;
@@ -46,12 +46,13 @@ bool compare(std::string_view name, const std::vector<float> & actual,
 
 } // namespace
 
-int main(int argc, char ** argv) try {
+int main(int argc, char **argv) try {
     if (argc != 4) {
         std::cerr << "usage: skintokens-vae-parity MODEL_DIR FIXTURE_DIR auto|cpu|vulkan\n";
         return 2;
     }
-    skintokens::runtime_options options; options.device = parse_device(argv[3]);
+    skintokens::runtime_options options;
+    options.device = parse_device(argv[3]);
     auto backend = skintokens::detail::make_backend(options);
     if (!backend) throw std::runtime_error(backend.error().message);
     auto weights = skintokens::detail::load_component(
@@ -62,19 +63,20 @@ int main(int argc, char ** argv) try {
         read_values(fixtures / "skin-vae-points.f32"), read_values(fixtures / "skin-vae-normals.f32"));
     if (!actual) throw std::runtime_error(actual.error().message);
     bool passed = true;
-    constexpr const char * names[]{"condition_embedding", "cond_projected", "cond_cross",
+    constexpr const char *names[]{"condition_embedding", "cond_projected", "cond_cross",
         "cond_self_01", "cond_self_02", "cond_norm", "cond_latents", "codes", "decoder_input",
         "decoder_self_01", "decoder_self_02", "decoder_self_03", "decoder_self_04", "decoder_self_05",
         "decoder_self_06", "decoder_self_07", "decoder_self_08", "decoder_self_09", "decoder_self_10",
         "decoder_cache", "decoder_cross", "output"};
-    for (const char * name : names) {
+    for (const char *name : names) {
         const auto found = actual->find(name);
         if (found == actual->end()) throw std::runtime_error(std::string{"missing snapshot: "} + name);
         passed = compare(name, found->second,
-            read_values(fixtures / (std::string{"skin-vae-"} + name + ".f32"))) && passed;
+                     read_values(fixtures / (std::string{"skin-vae-"} + name + ".f32"))) &&
+            passed;
     }
     return passed ? 0 : 1;
-} catch (const std::exception & exception) {
+} catch (const std::exception &exception) {
     std::cerr << exception.what() << '\n';
     return 1;
 }
