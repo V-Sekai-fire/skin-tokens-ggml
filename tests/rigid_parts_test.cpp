@@ -1,7 +1,8 @@
-// Rigid assemblies: a model made of separate closed solids (an anatomical
-// skeleton) gets one joint per part; a character with open sheets or one big
-// body keeps its soft weights. Each check runs next to a control that must
-// show the defect. Plain checks (not assert) so a Release build keeps them.
+// Rigid parts: a closed part that sits on one joint (a bone, a buckle) gets
+// that joint at 100%; open sheets, parts crossing joints, parts whose weights
+// reach far joints and parts that hold a joint of their own stay soft. Each
+// check runs next to a control that must show the defect. Plain checks (not
+// assert) so a Release build keeps them.
 #include "binding.hpp"
 #include "rigid_parts.hpp"
 
@@ -72,8 +73,9 @@ void add_sheet(model &m, float x0, float y0, float size, int cells) {
 }
 
 // Ten bones in a row along x, bone b spans [b, b + 0.8]. Joint b sits at the
-// bone's start; the soft weights blend joints b and b + 1 linearly along the
-// bone (the "bubble gum" the learned weights give), 75/25 at the far end.
+// bone's start; the soft weights blend joint b with its next joint linearly
+// along the bone (the "bubble gum" the learned weights give), 75/25 at the
+// far end.
 constexpr int bones = 10;
 constexpr std::size_t joints = bones + 1;
 
@@ -93,8 +95,11 @@ std::vector<float> soft_rows(const model &m, std::size_t outline_first) {
         const auto b = static_cast<std::size_t>(std::floor(x));
         const float t = std::clamp(x - static_cast<float>(b), 0.0F, 0.8F) / 0.8F;
         float *row = rows.data() + v * joints;
+        // The last bone blends back toward its parent, so the end joint
+        // carries no weight (like a bare "_end" joint).
+        const std::size_t other = b + 1U < static_cast<std::size_t>(bones) ? b + 1U : b - 1U;
         row[b] = 1.0F - 0.25F * t;
-        row[b + 1U] = 0.25F * t;
+        row[other] = 0.25F * t;
         // The outline's own weights lean to joint 1 (60%): alone it would
         // pick a different joint than its bone and slide off it.
         if (v >= outline_first) {
@@ -129,25 +134,164 @@ void parts_and_closedness() {
     check(closed == static_cast<std::size_t>(bones), "parts: the bones are closed, the sheet is open");
 }
 
-void assembly_decision() {
-    const model bonesonly = skeleton(true);
-    check(rigid::is_assembly(rigid::find_parts(bonesonly.vertices.size(), bonesonly.faces)),
-        "assembly: separate closed bones are an assembly");
+// Joints sit at x = 0..10 along the bones' centre line (y = z = 0.1); joint
+// j's parent is j - 1.
+std::vector<vec3> chain_joints() {
+    std::vector<vec3> out;
+    for (std::size_t j = 0; j < joints; ++j) out.push_back({static_cast<float>(j), 0.1F, 0.1F});
+    return out;
+}
 
-    // Mint-like: the same bones plus open hair/cloth sheets holding most of
-    // the vertices. Nothing may change.
-    model dressed = skeleton(true);
-    for (int k = 0; k < 4; ++k) add_sheet(dressed, static_cast<float>(k), 3.0F, 1.0F, 8);
-    check(!rigid::is_assembly(rigid::find_parts(dressed.vertices.size(), dressed.faces)),
-        "assembly: a model with open sheets is not");
+std::vector<std::int32_t> chain_parents() {
+    std::vector<std::int32_t> out;
+    for (std::size_t j = 0; j < joints; ++j) out.push_back(static_cast<std::int32_t>(j) - 1);
+    return out;
+}
 
-    // One closed body (a low-poly character) is not an assembly either.
-    model body;
-    add_bone(body, {0.0F, 0.0F, 0.0F}, {10.0F, 0.2F, 0.2F}, 60);
-    for (int b = 0; b < bones; ++b)
-        add_bone(body, {static_cast<float>(b), 1.0F, 0.0F}, {static_cast<float>(b) + 0.1F, 1.1F, 0.1F}, 1);
-    check(!rigid::is_assembly(rigid::find_parts(body.vertices.size(), body.faces)),
-        "assembly: one large closed body is not");
+// A far open sheet (skin elsewhere on the body) giving every joint except
+// `skip` some weight, as on a real model where each joint moves more than
+// one part.
+void add_background(model &m, std::vector<float> &rows, std::size_t count, std::size_t skip = 999U) {
+    const auto first = m.vertices.size();
+    add_sheet(m, 0.0F, 6.0F, 10.0F, 12);
+    rows.resize(m.vertices.size() * count, 0.0F);
+    for (std::size_t v = first; v < m.vertices.size(); ++v) {
+        const std::size_t joint = (v - first) % joints;
+        rows[v * count + (joint == skip ? 0U : joint)] = 1.0F;
+    }
+}
+
+std::size_t run_rule(const model &m, std::vector<float> &rows, std::size_t joint_count = joints,
+    std::vector<vec3> where = chain_joints(), std::vector<std::int32_t> parents = chain_parents()) {
+    const auto found = rigid::find_parts(m.vertices.size(), m.faces);
+    return rigid::snap_rigid_parts(found, rigid::pair_shells(found, m.vertices), m.vertices, rows, joint_count,
+        parents, where);
+}
+
+void owners_follow_segments() {
+    const auto where = chain_joints();
+    const auto parents = chain_parents();
+    const std::vector<vec3> points{{2.5F, 0.3F, 0.1F}, {0.2F, -0.5F, 0.1F}, {10.4F, 0.1F, 0.1F}};
+    const auto own = rigid::owners(points, where, parents);
+    check(own[0] == 2U && own[1] == 0U, "owners: a point beside segment j -> j+1 belongs to joint j");
+    check(own[2] == 10U, "owners: a point past the last joint belongs to that joint");
+}
+
+void soft_parts_stay_soft() {
+    // Open sheets (hair cards, cloth) never change.
+    {
+        model m;
+        add_sheet(m, 2.1F, 0.0F, 0.6F, 4);
+        std::vector<float> rows(m.vertices.size() * joints, 0.0F);
+        for (std::size_t v = 0; v < m.vertices.size(); ++v) {
+            rows[v * joints + 2U] = 0.6F;
+            rows[v * joints + 3U] = 0.4F;
+        }
+        add_background(m, rows, joints);
+        const auto before = rows;
+        const auto n = run_rule(m, rows);
+        check(n == 0U && rows == before, "soft: an open sheet keeps its weights");
+    }
+    // A closed sleeve over joint 4 (x 3.3 to 5.7) weighted on joints 4 and 5
+    // only: its weights stay within one bone, but it crosses joints.
+    {
+        model m;
+        add_bone(m, {3.3F, 0.0F, 0.0F}, {5.7F, 0.2F, 0.2F}, 6);
+        std::vector<float> rows(m.vertices.size() * joints, 0.0F);
+        for (std::size_t v = 0; v < m.vertices.size(); ++v) {
+            const float t = (m.vertices[v].x - 3.3F) / 2.4F;
+            rows[v * joints + 4U] = 1.0F - t;
+            rows[v * joints + 5U] = t;
+        }
+        add_background(m, rows, joints);
+        const auto before = rows;
+        const auto n = run_rule(m, rows);
+        check(n == 0U && rows == before, "soft: a closed sleeve across a joint keeps its weights");
+    }
+    // The same soft sleeve with an inverted-hull outline whose own weights
+    // differ: the outline copies the sleeve vertex under it.
+    {
+        model m;
+        add_bone(m, {3.3F, 0.0F, 0.0F}, {5.7F, 0.2F, 0.2F}, 6);
+        const std::size_t sleeve = m.vertices.size();
+        add_bone(m, {3.28F, -0.02F, -0.02F}, {5.72F, 0.22F, 0.22F}, 6);
+        std::vector<float> rows(m.vertices.size() * joints, 0.0F);
+        for (std::size_t v = 0; v < m.vertices.size(); ++v) {
+            const float t = std::clamp((m.vertices[v].x - 3.3F) / 2.4F, 0.0F, 1.0F);
+            rows[v * joints + 4U] = v < sleeve ? 1.0F - t : 0.5F;
+            rows[v * joints + 5U] = v < sleeve ? t : 0.5F;
+        }
+        add_background(m, rows, joints);
+        const auto inner = std::vector<float>(rows.begin(), rows.begin() + static_cast<std::ptrdiff_t>(sleeve * joints));
+        check(!std::equal(inner.begin(), inner.end(), rows.begin() + static_cast<std::ptrdiff_t>(sleeve * joints)),
+            "control: the outline's own weights differ from its sleeve's");
+        const auto n = run_rule(m, rows);
+        const bool same = std::equal(inner.begin(), inner.end(), rows.begin() + static_cast<std::ptrdiff_t>(sleeve * joints));
+        check(n == 0U && same, "soft: the outline of a soft sleeve copies the sleeve's weights");
+    }
+    // A closed body crossing every joint (a one-piece character, a whole limb).
+    {
+        model m;
+        add_bone(m, {0.0F, 0.0F, 0.0F}, {10.0F, 0.2F, 0.2F}, 40);
+        auto rows = soft_rows(m, m.vertices.size());
+        const auto before = rows;
+        const auto n = run_rule(m, rows);
+        check(n == 0U && rows == before, "soft: a closed body across joints keeps its weights");
+    }
+    // A closed clip on one segment whose weights reach a far joint (a cord on
+    // a long chain) stays soft.
+    {
+        model m;
+        add_bone(m, {2.1F, 0.0F, 0.0F}, {2.6F, 0.2F, 0.2F}, 2);
+        std::vector<float> rows(m.vertices.size() * joints, 0.0F);
+        for (std::size_t v = 0; v < m.vertices.size(); ++v) {
+            rows[v * joints + 2U] = 0.7F;
+            rows[v * joints + 6U] = 0.3F;
+        }
+        add_background(m, rows, joints);
+        const auto before = rows;
+        const auto n = run_rule(m, rows);
+        check(n == 0U && rows == before, "soft: a clip whose weights reach a far joint keeps them");
+        // Control: the same clip with its weights within one bone snaps.
+        for (std::size_t v = 0; v < 12U; ++v) {
+            rows[v * joints + 6U] = 0.0F;
+            rows[v * joints + 3U] = 0.3F;
+        }
+        check(run_rule(m, rows) == 1U && rows[2U] == 1.0F, "control: the same clip within one bone snaps");
+    }
+    // Joint-loss guard: an "eye" whose second joint exists only for it.
+    {
+        model m;
+        add_bone(m, {3.2F, 0.0F, 0.0F}, {3.5F, 0.2F, 0.2F}, 2);
+        add_bone(m, {7.2F, 0.0F, 0.0F}, {7.5F, 0.2F, 0.2F}, 2); // a plain part beside it
+        auto where = chain_joints();
+        auto parents = chain_parents();
+        where.push_back({3.5F, 2.0F, 0.1F}); // joint 11 = the eye joint, child of 3, off the bone line
+        parents.push_back(3);
+        const std::size_t count = joints + 1U;
+        std::vector<float> rows(m.vertices.size() * count, 0.0F);
+        for (std::size_t v = 0; v < 12U; ++v) {
+            rows[v * count + 3U] = 0.6F;
+            rows[v * count + 11U] = 0.4F;
+        }
+        for (std::size_t v = 12U; v < 24U; ++v) rows[v * count + 7U] = 0.8F, rows[v * count + 8U] = 0.2F;
+        add_background(m, rows, count, 11U);
+        const auto n = run_rule(m, rows, count, where, parents);
+        check(n == 1U && rows[11U] == 0.4F, "guard: the eye keeps its own joint; only the plain part snaps");
+        // Control: with the guard off the eye joint loses everything.
+        std::vector<float> plain(24U * count, 0.0F);
+        for (std::size_t v = 0; v < 12U; ++v) plain[v * count + 3U] = 0.6F, plain[v * count + 11U] = 0.4F;
+        model bare;
+        bare.vertices.assign(m.vertices.begin(), m.vertices.begin() + 24);
+        bare.faces.assign(m.faces.begin(), m.faces.begin() + 40);
+        m = bare;
+        const auto found = rigid::find_parts(m.vertices.size(), m.faces);
+        rigid::rule off;
+        off.keep_joint = 0.0;
+        rigid::snap_rigid_parts(found, rigid::pair_shells(found, m.vertices), m.vertices, plain, count, parents,
+            where, off);
+        check(plain[11U] == 0.0F, "control: without the guard the eye joint is lost");
+    }
 }
 
 void snap_with_outline() {
@@ -164,14 +308,14 @@ void snap_with_outline() {
     std::vector<std::uint32_t> alone(found.members.size());
     for (std::uint32_t p = 0; p < alone.size(); ++p) alone[p] = p;
     auto unpaired = rows;
-    rigid::snap(found, alone, unpaired, joints);
+    rigid::snap_rigid_parts(found, alone, m.vertices, unpaired, joints, chain_parents(), chain_joints());
     check(strongest(unpaired, outline_first) != strongest(unpaired, 0U), "control: unpaired outline differs from its bone");
 
     const auto group = rigid::pair_shells(found, m.vertices);
     std::size_t paired = 0U;
     for (std::uint32_t p = 0; p < group.size(); ++p) paired += group[p] != p ? 1U : 0U;
     check(paired == 1U, "pairing: exactly one part joins a shell (bone 0 with its outline)");
-    const auto snapped = rigid::snap(found, group, rows, joints);
+    const auto snapped = rigid::snap_rigid_parts(found, group, m.vertices, rows, joints, chain_parents(), chain_joints());
     check(snapped == found.members.size(), "snap: every part snapped");
     check(strongest_share_min(m, rows, 0U, m.vertices.size()) == 1.0F, "snap: every vertex follows one joint at 100%");
     check(strongest(rows, outline_first) == strongest(rows, 0U) && strongest(rows, 0U) == 0U,
@@ -216,7 +360,8 @@ void through_transfer() {
     }
     const auto run = [&](bool on) {
         skintokens::detail::robust_transfer_options options;
-        options.rigid_assemblies = on;
+        options.rigid_parts = on;
+        options.joints = rig.rest_positions;
         return skintokens::detail::integrate_robust_binding(rig, m.vertices, normals, faces, points, point_normals,
             point_faces, dense, options);
     };
@@ -230,8 +375,8 @@ void through_transfer() {
     }
     std::printf("     transfer: weakest top weight soft %.3f rigid %.3f, rigid parts %zu\n",
         static_cast<double>(soft_min), static_cast<double>(hard_min), hard.transfer.rigid_parts);
-    check(soft_min < 0.9F && soft.transfer.rigid_parts == 0U, "control: transfer without rigid assemblies stays blended");
-    check(hard_min == 1.0F, "transfer: every vertex of the assembly has one joint at 100%");
+    check(soft_min < 0.9F && soft.transfer.rigid_parts == 0U, "control: transfer without rigid parts stays blended");
+    check(hard_min == 1.0F, "transfer: every vertex of the bones has one joint at 100%");
     check(hard.transfer.rigid_parts == static_cast<std::size_t>(bones) + 1U, "transfer: reports eleven rigid parts");
     const std::size_t outline_first = static_cast<std::size_t>(bones) * 28U;
     check(hard.joints[outline_first][0] == hard.joints[0][0], "transfer: the outline follows its bone");
@@ -241,7 +386,8 @@ void through_transfer() {
 
 int main() {
     parts_and_closedness();
-    assembly_decision();
+    owners_follow_segments();
+    soft_parts_stay_soft();
     snap_with_outline();
     through_transfer();
     std::printf("%s (%d failed)\n", failures == 0 ? "PASS" : "FAIL", failures);
