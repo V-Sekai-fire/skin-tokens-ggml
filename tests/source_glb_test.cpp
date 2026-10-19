@@ -46,7 +46,7 @@ json read_json(const std::vector<std::byte> &glb) {
 }
 
 // Mesh 0: two triangles, two materials, NORMAL + TEXCOORD_0, placed twice (mirrored and plain).
-// Mesh 1: a triangle without indices, which the rig skips. One embedded image.
+// Mesh 1: a triangle without indices (a plain triangle list). One embedded image.
 std::vector<std::byte> fixture() {
     const float positions[] = {0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1};
     const float normals[] = {1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1};
@@ -95,7 +95,7 @@ std::vector<std::byte> fixture() {
 int main() {
     const auto source = fixture();
     auto geometry = skintokens::load_glb_memory(source);
-    CHECK(geometry && geometry->vertices.size() == 12U && geometry->faces.size() == 4U);
+    CHECK(geometry && geometry->vertices.size() == 15U && geometry->faces.size() == 5U);
 
     skintokens::skin binding;
     binding.rig.names = {"Hips", "Spine"};
@@ -126,6 +126,10 @@ int main() {
         ++skinned;
         CHECK(node["skin"] == 0);
         const auto &primitives = root["meshes"][node["mesh"].get<std::size_t>()]["primitives"];
+        if (node.value("name", "") == "Loose") {
+            CHECK(primitives.size() == 1U && primitives[0]["material"] == 1 && !primitives[0].contains("indices"));
+            continue;
+        }
         CHECK(primitives.size() == 2U);
         CHECK(primitives[0]["material"] == 0 && primitives[1]["material"] == 1);
         for (const auto &primitive : primitives) {
@@ -133,16 +137,17 @@ int main() {
             CHECK(primitive["attributes"].contains("JOINTS_0") && primitive["attributes"].contains("WEIGHTS_0"));
         }
     }
-    CHECK(skinned == 2U);
+    CHECK(skinned == 3U);
     const auto named = [&](std::string_view name, bool skinned) {
         for (std::size_t i = 0; i < root["nodes"].size(); ++i)
             if (root["nodes"][i].value("name", "") == name && root["nodes"][i].contains("skin") == skinned) return i;
         return root["nodes"].size();
     };
     for (const auto &node : root["nodes"]) // an emptied source node keeps no mesh (or is gone)
-        if (!node.contains("skin") && (node.value("name", "") == "Left" || node.value("name", "") == "Right"))
+        if (!node.contains("skin") &&
+            (node.value("name", "") == "Left" || node.value("name", "") == "Right" || node.value("name", "") == "Loose"))
             CHECK(!node.contains("mesh"));
-    CHECK(root["nodes"][named("Loose", false)]["mesh"] == 1); // the skipped primitive stays where it was
+    CHECK(named("Loose", true) < root["nodes"].size()); // the non-indexed primitive is skinned too
     CHECK(root["animations"].size() == 1U && root["animations"][0]["name"] == "RESET");
     CHECK(root["skins"][0]["joints"].size() == 2U);
 
