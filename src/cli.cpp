@@ -282,6 +282,10 @@ int main(int argc, char ** argv) {
     }
     skintokens::runtime_options runtime;
     skintokens::generation_options generation;
+    // The viewer's settings: one beam, always the most likely token. Sampled beams (temperature 1)
+    // can grow skeletons the skin codes cannot cover; --beams and --temperature still choose.
+    generation.beams = 1U;
+    generation.temperature = 0.0F;
     auto fit = skintokens::skeleton_fit::global_similarity;
     bool supplied_skeleton = false;
     std::string_view target_rig = "soma30";
