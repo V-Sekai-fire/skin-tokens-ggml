@@ -1,0 +1,27 @@
+name: Static checks
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [main]
+
+concurrency:
+  group: static-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  prek:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: demo/go.mod
+          cache: false
+      - uses: j178/prek-action@v3.0.2
+        with:
+          extra-args: --all-files

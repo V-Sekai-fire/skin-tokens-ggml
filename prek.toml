@@ -1,0 +1,32 @@
+# Checks that hold for the tree as it is. ggml/ is a vendored upstream tree and
+# patches/ holds diffs whose whitespace is part of the patch, so both stay out.
+exclude = "^(ggml/|patches/)"
+
+[[repos]]
+repo = "builtin"
+hooks = [
+  { id = "trailing-whitespace" },
+  { id = "end-of-file-fixer" },
+  { id = "mixed-line-ending" },
+  { id = "check-merge-conflict" },
+  { id = "check-added-large-files" },
+  { id = "check-yaml" },
+  { id = "check-json" },
+  { id = "check-toml" },
+]
+
+# Pyflakes and syntax errors only. The Python here keeps its own layout, so
+# neither ruff's wider rule set nor its formatter runs.
+[[repos]]
+repo = "https://github.com/astral-sh/ruff-pre-commit"
+rev = "v0.17.1"
+hooks = [
+  { id = "ruff-check", args = ["--isolated", "--select", "E9,F"] },
+]
+
+[[repos]]
+repo = "local"
+hooks = [
+  # gofmt -l exits 0 even when it lists files, so turn its list into a failure.
+  { id = "gofmt", name = "gofmt", language = "system", entry = "bash -c 'out=$(gofmt -l \"$@\"); [ -z \"$out\" ] || { echo \"$out\"; exit 1; }' --", files = "\\.go$" },
+]

@@ -17,7 +17,6 @@ import struct
 from dataclasses import dataclass
 from pathlib import Path
 
-import numpy as np
 from safetensors import safe_open
 
 GGUF_MAGIC = b"GGUF"

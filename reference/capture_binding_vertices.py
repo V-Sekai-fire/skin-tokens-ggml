@@ -37,7 +37,6 @@ def matrix(rotation: np.ndarray, translation: np.ndarray) -> np.ndarray:
 def animated_vertices(positions: np.ndarray, joints: np.ndarray, weights: np.ndarray,
                       parents: np.ndarray, rest: np.ndarray, roots: np.ndarray,
                       rotations: np.ndarray, frames: list[int]) -> np.ndarray:
-    homogeneous = np.concatenate((positions.astype(np.float64), np.ones((len(positions), 1))), axis=1)
     output = np.zeros((len(frames), len(positions), 3), dtype="<f4")
     for selected, frame in enumerate(frames):
         globals_ = np.zeros((len(rest), 4, 4), dtype=np.float64)
