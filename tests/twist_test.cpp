@@ -1,5 +1,5 @@
 // add_twist_joints: four helpers per long limb segment, and the segment's weight split among them
-// by where each vertex lies along the segment (a ggml graph, here on the CPU device).
+// by where each vertex lies along the segment (a ggml graph on the default GPU device).
 #include <skintokens/skintokens.hpp>
 
 #include <algorithm>
@@ -46,10 +46,16 @@ int main() {
     binding.joints.push_back({static_cast<std::uint16_t>(hips), static_cast<std::uint16_t>(forearm), 0, 0});
     binding.weights.push_back({0.75F, 0.25F, 0.0F, 0.0F});
     // The vertex at the hips lies past the forearm's start: its quarter goes to Twist1.
+    // A full vertex halfway down the forearm: no free slot for a second helper. The other three
+    // joints keep their weights; the forearm's 0.4 goes whole to one helper.
+    const int head = index("mixamorig:Head"), spine = index("mixamorig:Spine");
+    geometry.vertices.push_back({a.x + 0.5F * (b.x - a.x), a.y + 0.5F * (b.y - a.y), a.z + 0.5F * (b.z - a.z)});
+    binding.joints.push_back({static_cast<std::uint16_t>(forearm), static_cast<std::uint16_t>(hips),
+                              static_cast<std::uint16_t>(head), static_cast<std::uint16_t>(spine)});
+    binding.weights.push_back({0.4F, 0.3F, 0.2F, 0.1F});
 
-    skintokens::runtime_options cpu;
-    cpu.device = skintokens::device_kind::cpu;
-    auto twisted = skintokens::add_twist_joints(geometry, binding, cpu);
+    skintokens::runtime_options gpu;  // default device: Metal/Vulkan, never the CPU
+    auto twisted = skintokens::add_twist_joints(geometry, binding, gpu, false);  // split only
     if (!twisted) { std::fprintf(stderr, "twist: %s\n", twisted.error().message.c_str()); return 1; }
     const auto & out = *twisted;
     CHECK(out.segments.size() == 8U);
@@ -96,10 +102,70 @@ int main() {
     CHECK(std::abs(weight_on(4, fore->helpers[1]) - 0.5F) < 1e-4F && std::abs(weight_on(4, fore->helpers[2]) - 0.5F) < 1e-4F);
     CHECK(weight_on(4, forearm) == 0.0F);                             // the start joint gave its weight away
     CHECK(std::abs(weight_on(9, hips) - 0.75F) < 1e-6F);              // other joints keep theirs
+    CHECK(head >= 0 && spine >= 0);
+    CHECK(std::abs(weight_on(10, hips) - 0.3F) < 1e-6F && std::abs(weight_on(10, head) - 0.2F) < 1e-6F &&
+          std::abs(weight_on(10, spine) - 0.1F) < 1e-6F);                // a full vertex drops no joint
+    CHECK(std::abs(weight_on(10, fore->helpers[1]) + weight_on(10, fore->helpers[2]) - 0.4F) < 1e-5F);
+    CHECK(weight_on(10, fore->helpers[1]) == 0.0F || weight_on(10, fore->helpers[2]) == 0.0F);
     for (std::size_t v = 0; v < geometry.vertices.size(); ++v) {
         float sum = 0.0F;
         for (float w : out.binding.weights[v]) sum += w;
         CHECK(std::abs(sum - 1.0F) < 1e-5F);
+    }
+
+    // The check: a forearm tube whose weight blends into the hand pinches at the wrist when the
+    // hand turns, and helpers spread the turn, so they stay. A control tube weighted wholly to the
+    // forearm does not move when the hand turns; helpers would only shear it, so they go.
+    const auto tube = [&](bool blend) {
+        skintokens::mesh m;
+        skintokens::skin k;
+        k.rig = *rig;
+        const auto ax = b.x - a.x, ay = b.y - a.y;
+        const float len = std::sqrt(ax * ax + ay * ay);
+        const float nx = -ay / len, ny = ax / len;  // perpendicular in the x-y plane; z is the other
+        constexpr int rings = 13, around = 12;
+        for (int i = 0; i < rings; ++i) {
+            const float s = static_cast<float>(i) / static_cast<float>(rings - 1);
+            for (int j = 0; j < around; ++j) {
+                const float th = 6.2831853F * static_cast<float>(j) / around, r = 0.03F;
+                m.vertices.push_back({a.x + s * ax + r * std::cos(th) * nx, a.y + s * ay + r * std::cos(th) * ny, a.z + r * std::sin(th)});
+                const float to_hand = blend ? std::clamp((s - 0.5F) / 0.5F, 0.0F, 1.0F) : 0.0F;
+                k.joints.push_back({static_cast<std::uint16_t>(forearm), static_cast<std::uint16_t>(hand), 0, 0});
+                k.weights.push_back({1.0F - to_hand, to_hand, 0.0F, 0.0F});
+            }
+        }
+        for (int i = 0; i + 1 < rings; ++i)
+            for (int j = 0; j < around; ++j) {
+                const auto p = static_cast<std::uint32_t>(i * around + j), q = static_cast<std::uint32_t>(i * around + (j + 1) % around);
+                m.faces.push_back({p, q, p + around});
+                m.faces.push_back({q, q + around, p + around});
+            }
+        return std::pair{m, k};
+    };
+    const auto forearm_check = [&](const skintokens::twist_rig & r) {
+        for (const auto & c : r.checks) if (c.start == forearm) return c;
+        return skintokens::twist_check{};
+    };
+    {
+        auto [m, k] = tube(true);
+        auto r = skintokens::add_twist_joints(m, k, gpu);
+        CHECK(r);
+        const auto c = forearm_check(*r);
+        std::printf("blended tube: plain %.3f twisted %.3f\n", c.plain, c.twisted);
+        CHECK(c.start == forearm && c.kept && c.twisted > c.plain);
+        bool has = false;
+        for (const auto & s : r->segments) has = has || s.start == forearm;
+        CHECK(has);
+    }
+    {
+        auto [m, k] = tube(false);
+        auto r = skintokens::add_twist_joints(m, k, gpu);
+        CHECK(r);
+        const auto c = forearm_check(*r);
+        std::printf("forearm-only tube: plain %.3f twisted %.3f\n", c.plain, c.twisted);
+        CHECK(c.start == forearm && !c.kept);
+        for (const auto & s : r->segments) CHECK(s.start != forearm);
+        for (const auto & w : r->binding.weights) CHECK(w[0] == 1.0F);  // unchanged: still all forearm
     }
 
     // Control: a rig that is not a humanoid gets no helpers.
@@ -111,7 +177,7 @@ int main() {
     chain.weights = {{1, 0, 0, 0}};
     skintokens::mesh one;
     one.vertices = {{0, 0.5F, 0}};
-    CHECK(!skintokens::add_twist_joints(one, chain, cpu));
+    CHECK(!skintokens::add_twist_joints(one, chain, gpu));
     std::puts("twist-test: PASS");
     return 0;
 }
