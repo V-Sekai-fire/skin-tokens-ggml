@@ -226,6 +226,9 @@ struct skin {
         std::size_t solved_joints = 0;
         std::size_t iterations = 0;
         float residual = 0.0F;
+        // Parts of a rigid assembly (a model made of separate closed solids,
+        // such as an anatomical skeleton) given one joint at 100%.
+        std::size_t rigid_parts = 0;
     } transfer;
 };
 

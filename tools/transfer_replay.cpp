@@ -5,6 +5,7 @@
 //   CLI:   SKINTOKENS_DUMP_TRANSFER=<file.stkt> skintokens-cli rig ...
 //   skintokens-transfer-replay TRACE.stkt RIGGED.glb OUT.glb [--raw]
 //          [--geodesic R] [--facing DEG] [--outlier L1] [--support S] [--reach F]
+//          [--rigid 0|1]
 //
 // RIGGED.glb supplies the mesh and the skeleton (any rig of the same run).
 // --raw writes the upstream eight-neighbour interpolation instead; it must
@@ -25,7 +26,7 @@ int main(int argc, char **argv) {
     if (argc < 4) {
         std::fprintf(stderr,
             "usage: skintokens-transfer-replay TRACE.stkt RIGGED.glb OUT.glb [--raw]"
-            " [--geodesic R] [--facing DEG] [--outlier L1] [--support S] [--reach F]\n");
+            " [--geodesic R] [--facing DEG] [--outlier L1] [--support S] [--reach F] [--rigid 0|1]\n");
         return 2;
     }
     skintokens::detail::robust_transfer_options options;
@@ -47,6 +48,7 @@ int main(int argc, char **argv) {
         else if (key == "--support") options.support_share = value;
         else if (key == "--reach") options.distance_fraction = value;
         else if (key == "--smooth") options.smooth_iterations = static_cast<std::size_t>(value);
+        else if (key == "--rigid") options.rigid_assemblies = value != 0.0F;
         else {
             std::fprintf(stderr, "unknown option %s\n", argv[i - 1]);
             return 2;
@@ -82,9 +84,9 @@ int main(int argc, char **argv) {
     const auto &r = result.transfer;
     std::printf(
         "REPLAY %s welded=%zu matched=%zu outliers=%zu inpainted=%zu fallback=%zu trimmed_parts=%zu"
-        " solved_joints=%zu iterations=%zu residual=%.1e ms=%.0f\n",
+        " rigid_parts=%zu solved_joints=%zu iterations=%zu residual=%.1e ms=%.0f\n",
         raw_only ? "raw" : "robust", r.welded, r.matched, r.outliers, r.inpainted, r.fallback, r.trimmed_parts,
-        r.solved_joints, r.iterations, static_cast<double>(r.residual), ms);
+        r.rigid_parts, r.solved_joints, r.iterations, static_cast<double>(r.residual), ms);
     asset->binding.joints = result.joints;
     asset->binding.weights = result.weights;
     skintokens::motion rest;
