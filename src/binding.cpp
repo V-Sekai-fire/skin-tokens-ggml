@@ -1,4 +1,5 @@
 #include "binding.hpp"
+#include "rigid_parts.hpp"
 
 #include <algorithm>
 #include <array>
@@ -1314,6 +1315,13 @@ skin integrate_robust_binding(
                     values[joint] = keep[joint] ? static_cast<float>(values[joint] / kept) : 0.0F;
             }
         }
+    }
+
+    // 6b. Rigid assemblies: every part follows one joint (rigid_parts.hpp).
+    if (options.rigid_assemblies) {
+        const auto solids = rigid::find_parts(count, welded_faces);
+        if (rigid::is_assembly(solids))
+            output.transfer.rigid_parts = rigid::snap(solids, rigid::pair_shells(solids, position), robust, joint_count);
     }
 
     for (std::size_t vertex = 0; vertex < n; ++vertex)
