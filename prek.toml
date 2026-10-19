@@ -15,13 +15,21 @@ hooks = [
   { id = "check-toml" },
 ]
 
-# Pyflakes and syntax errors only. The Python here keeps its own layout, so
-# neither ruff's wider rule set nor its formatter runs.
+# Pyflakes and syntax errors, then ruff's default formatting.
 [[repos]]
 repo = "https://github.com/astral-sh/ruff-pre-commit"
 rev = "v0.17.1"
 hooks = [
   { id = "ruff-check", args = ["--isolated", "--select", "E9,F"] },
+  { id = "ruff-format", args = ["--isolated"] },
+]
+
+# The style lives in .clang-format.
+[[repos]]
+repo = "https://github.com/pre-commit/mirrors-clang-format"
+rev = "v22.1.8"
+hooks = [
+  { id = "clang-format", types_or = ["c", "c++"] },
 ]
 
 [[repos]]
