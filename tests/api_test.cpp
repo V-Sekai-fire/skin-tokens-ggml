@@ -305,6 +305,31 @@ int main() {
     assert(generated_match->report.mapped_core_joints == 22U);
     assert(generated_match->report.ignored_terminal_joints == 12U);
     assert(generated_match->soma_to_generated[11U] >= 0);
+    // The JSON the viewer reads: 22 roles on a pass; sides follow the feet's facing, not +X;
+    // a rig upside down fails the upright gate.
+    const std::string roles_json = skintokens::humanoid_roles_json(flexible_generated);
+    const auto count_pairs = [](const std::string & text) {
+        std::size_t n = 0;
+        for (auto at = text.find("\":\""); at != std::string::npos; at = text.find("\":\"", at + 1)) ++n;
+        return n;
+    };
+    assert(roles_json.starts_with("{\"gates\":\"pass\",\"roles\":{"));
+    assert(count_pairs(roles_json) == 1U + 22U);
+    const auto role_of = [](const std::string & text, const std::string & role) {
+        const auto key = "\"" + role + "\":\"";
+        const auto at = text.find(key);
+        assert(at != std::string::npos);
+        return text.substr(at + key.size(), text.find('"', at + key.size()) - at - key.size());
+    };
+    auto facing_back = flexible_generated;
+    for (auto & p : facing_back.rest_positions) p.z = -p.z;
+    const std::string back_json = skintokens::humanoid_roles_json(facing_back);
+    assert(back_json.starts_with("{\"gates\":\"pass\""));
+    assert(role_of(back_json, "left_hand") == role_of(roles_json, "right_hand"));
+    auto upside_down = flexible_generated;
+    for (auto & p : upside_down.rest_positions) p.y = -p.y;
+    const std::string down_json = skintokens::humanoid_roles_json(upside_down);
+    assert(down_json.starts_with("{\"gates\":\"fail\""));
     auto generated_motion = skintokens::retarget_soma30_motion_to_generated(
         soma30, flexible_generated, *generated_match);
     assert(generated_motion && generated_motion->rig.parents == flexible_generated.parents);

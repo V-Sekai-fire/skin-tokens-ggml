@@ -32,6 +32,7 @@ void usage() {
                  " [--minimum-confidence F] [--map-fingers]\n"
               << "  skintokens-cli retarget-generated-check SOMA30.glb GENERATED.glb\n"
               << "  skintokens-cli add-motion RIGGED.glb CLIP_DIR loop|once SECONDS NAME OUTPUT.glb\n"
+              << "  skintokens-cli humanoid GENERATED.glb\n"
               << "  skintokens-cli prepare-mixamo MESH.glb SOMA30.glb OUTPUT.glb\n"
               << "  skintokens-cli bind MODEL_DIR MESH.{glb,t2mesh} MOTION.glb OUTPUT.glb"
                  " [--device auto|cpu|vulkan] [--geometric|--supplied-skeleton]"
@@ -163,6 +164,14 @@ int main(int argc, char ** argv) {
                   << ",\"framesPerSecond\":" << info->frames_per_second
                   << ",\"rigKind\":\"" << rig << "\"}\n";
         return 0;
+    }
+    if (std::string_view{argv[1]} == "humanoid") {
+        if (argc != 3) { usage(); return 2; }
+        auto asset = skintokens::load_skinned_glb_file(argv[2]);
+        if (!asset) { std::cerr << asset.error().message << '\n'; return 1; }
+        const std::string json = skintokens::humanoid_roles_json(asset->binding.rig);
+        std::cout << json << '\n';
+        return json.starts_with("{\"gates\":\"pass\"") ? 0 : 3;
     }
     if (std::string_view{argv[1]} == "retarget-generated") {
         if (argc < 5) { usage(); return 2; }
