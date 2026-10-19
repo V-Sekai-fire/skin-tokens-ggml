@@ -1,4 +1,5 @@
 #include "internal.hpp"
+#include "skeleton_grammar.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -240,85 +241,6 @@ std::vector<std::pair<double, std::int32_t>> beam_candidates(
         candidates.resize(std::max<std::size_t>(1U, nucleus));
     }
     return candidates;
-}
-
-enum class skeleton_state {
-    expect_bos,
-    expect_cls_or_part_or_joint,
-    expect_part_or_joint,
-    expect_joint_2,
-    expect_joint_3,
-    expect_branch_or_part_or_joint,
-    expect_joint,
-};
-
-struct skeleton_parse {
-    skeleton_state state = skeleton_state::expect_bos;
-    std::size_t joints = 0;
-    bool ended = false;
-};
-
-skeleton_parse parse_skeleton(std::span<const std::int32_t> ids) {
-    skeleton_parse output;
-    bool branch_half = false;
-    for (const auto id : ids) {
-        if (output.ended) throw std::runtime_error("tokens follow the skeleton terminator");
-        switch (output.state) {
-        case skeleton_state::expect_bos:
-            if (id != 257) throw std::runtime_error("skeleton token sequence does not start with BOS");
-            output.state = skeleton_state::expect_cls_or_part_or_joint; break;
-        case skeleton_state::expect_cls_or_part_or_joint:
-            if (id < 256) output.state = skeleton_state::expect_joint_2;
-            else if (id >= 263 && id <= 266) output.state = skeleton_state::expect_part_or_joint;
-            else if (id >= 260 && id <= 262) output.state = skeleton_state::expect_joint;
-            else throw std::runtime_error("invalid token after skeleton BOS");
-            break;
-        case skeleton_state::expect_part_or_joint:
-            if (id == 258) output.ended = true;
-            else if (id < 256) output.state = skeleton_state::expect_joint_2;
-            else if (id >= 260 && id <= 262) output.state = skeleton_state::expect_part_or_joint;
-            else throw std::runtime_error("invalid skeleton part/joint token");
-            break;
-        case skeleton_state::expect_joint_2:
-            if (id >= 256) throw std::runtime_error("invalid second coordinate token");
-            output.state = skeleton_state::expect_joint_3; break;
-        case skeleton_state::expect_joint_3:
-            if (id >= 256) throw std::runtime_error("invalid third coordinate token");
-            if (branch_half) branch_half = false;
-            else ++output.joints;
-            output.state = skeleton_state::expect_branch_or_part_or_joint; break;
-        case skeleton_state::expect_branch_or_part_or_joint:
-            if (id == 258) output.ended = true;
-            else if (id == 256) { output.state = skeleton_state::expect_joint; branch_half = true; }
-            else if (id < 256) output.state = skeleton_state::expect_joint_2;
-            else if (id >= 260 && id <= 262) output.state = skeleton_state::expect_joint;
-            else throw std::runtime_error("invalid token between skeleton joints");
-            break;
-        case skeleton_state::expect_joint:
-            if (id >= 256) throw std::runtime_error("expected skeleton coordinate token");
-            output.state = skeleton_state::expect_joint_2; break;
-        }
-    }
-    return output;
-}
-
-std::vector<std::int32_t> allowed_skeleton_tokens(const skeleton_parse & parsed) {
-    std::vector<std::int32_t> output;
-    const auto coordinates = [&] { for (std::int32_t id = 0; id < 256; ++id) output.push_back(id); };
-    const auto parts = [&] { output.insert(output.end(), {260, 261, 262}); };
-    switch (parsed.state) {
-    case skeleton_state::expect_bos: output.push_back(257); break;
-    case skeleton_state::expect_cls_or_part_or_joint:
-        output.insert(output.end(), {263, 264, 265, 266}); parts(); coordinates(); break;
-    case skeleton_state::expect_part_or_joint:
-        parts(); coordinates(); if (parsed.joints != 0U) output.push_back(258); break;
-    case skeleton_state::expect_joint_2:
-    case skeleton_state::expect_joint_3:
-    case skeleton_state::expect_joint: coordinates(); break;
-    case skeleton_state::expect_branch_or_part_or_joint:
-        coordinates(); parts(); output.push_back(256); if (parsed.joints != 0U) output.push_back(258); break;
-    }
-    return output;
 }
 
 std::vector<std::pair<double, std::int32_t>> masked_candidates(
@@ -1179,7 +1101,7 @@ result<std::vector<std::int32_t>> generate_skin_codes(
     std::span<const float> mesh_embeddings, std::span<const std::int32_t> skeleton_tokens,
     std::size_t joint_count, const generation_options & options) try {
     if (backend == nullptr || mesh_embeddings.empty() || mesh_embeddings.size() % static_cast<std::size_t>(hidden) != 0U ||
-        skeleton_tokens.empty() || joint_count == 0U || joint_count > 256U || options.top_p < 0.0F ||
+        skeleton_tokens.empty() || joint_count == 0U || joint_count > max_skeleton_joints || options.top_p < 0.0F ||
         options.top_p > 1.0F || options.beams == 0U || options.beams > 32U ||
         !std::isfinite(options.temperature) || !std::isfinite(options.repetition_penalty))
         return std::unexpected(fail(error_code::invalid_argument, "invalid TokenRig generation input"));
@@ -1342,7 +1264,7 @@ result<generated_rig_tokens> generate_rig_tokens(
                 const auto skeleton_size = static_cast<std::size_t>(skeleton_end - active[beam].tokens.begin()) + 1U;
                 const auto parsed = parse_skeleton(std::span{active[beam].tokens.data(), skeleton_size});
                 const std::size_t codes = active[beam].tokens.size() - skeleton_size;
-                if (parsed.joints == 0U || parsed.joints > 256U) continue;
+                if (parsed.joints == 0U || parsed.joints > max_skeleton_joints) continue;
                 // The released processor counts the skeleton switch itself in
                 // the J*4 span. Consequently EOS is the fourth FSQ value of
                 // the final joint (index 32768 after subtracting vocab_size).
