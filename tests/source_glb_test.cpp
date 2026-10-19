@@ -6,6 +6,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <string>
@@ -301,6 +302,27 @@ int main() {
         if (!rigged) { std::fprintf(stderr, "turned writer: %s\n", rigged.error().message.c_str()); return 1; }
         auto back = skintokens::load_glb_memory(*rigged);
         CHECK(back && back->vertices.size() == 3U && same(back->vertices[2], 0, 1, 0));
+
+        // A Godot-written file (OpenUSD Z-up import) marks its one turned root GODOT_single_root.
+        // The turned root cannot hold the new nodes, so the scene gets several roots and the marker
+        // must go: Godot keeps only the first root of a marked scene and loses the skinned mesh.
+        // A root without a transform holds the new nodes and keeps the marker.
+        const auto single_root = [&](std::string_view matrix) {
+            std::string marked = text;
+            marked.replace(marked.find("\"scenes\":[{\"nodes\":[0,2]}]"), 26, "\"scenes\":[{\"nodes\":[0]}]");
+            marked.replace(marked.find("\"children\":[1]"), 14, "\"children\":[1,2]");
+            marked.replace(marked.find("[1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1]"), 37, std::string(matrix));
+            marked.insert(1, "\"extensionsUsed\":[\"GODOT_single_root\"],");
+            auto out = skintokens::save_rigged_source_glb_memory(pack(marked, bin), one, still);
+            if (!out) { std::fprintf(stderr, "single root writer: %s\n", out.error().message.c_str()); std::exit(1); }
+            return read_json(*out);
+        };
+        const json turned_marked = single_root("[1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1]");
+        CHECK(turned_marked["scenes"][0]["nodes"].size() > 1U);
+        CHECK(!turned_marked.contains("extensionsUsed"));
+        const json plain_marked = single_root("[1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]");
+        CHECK(plain_marked["scenes"][0]["nodes"].size() == 1U);
+        CHECK(plain_marked["extensionsUsed"] == json::array({"GODOT_single_root"}));
 
         // The new skin replaces the old skeleton. Old joints and emptied mesh nodes with nothing
         // below them go: a tool that reads every node under a skeleton makes each one a bone.
