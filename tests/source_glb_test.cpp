@@ -120,8 +120,15 @@ int main() {
         }
     }
     CHECK(skinned == 2U);
-    CHECK(!root["nodes"][0].contains("mesh") && !root["nodes"][1].contains("mesh"));
-    CHECK(root["nodes"][2]["mesh"] == 1);  // the skipped primitive stays where it was
+    const auto named = [&](std::string_view name, bool skinned) {
+        for (std::size_t i = 0; i < root["nodes"].size(); ++i)
+            if (root["nodes"][i].value("name", "") == name && root["nodes"][i].contains("skin") == skinned) return i;
+        return root["nodes"].size();
+    };
+    for (const auto & node : root["nodes"])  // an emptied source node keeps no mesh (or is gone)
+        if (!node.contains("skin") && (node.value("name", "") == "Left" || node.value("name", "") == "Right"))
+            CHECK(!node.contains("mesh"));
+    CHECK(root["nodes"][named("Loose", false)]["mesh"] == 1);  // the skipped primitive stays where it was
     CHECK(root["animations"].size() == 1U && root["animations"][0]["name"] == "RESET");
     CHECK(root["skins"][0]["joints"].size() == 2U);
 
@@ -136,7 +143,7 @@ int main() {
 
     // The mirrored copy's normal (1,0,0) goes through the inverse transpose: (-1,0,0).
     {
-        const auto & primitive = root["meshes"][root["nodes"][5]["mesh"].get<std::size_t>()]["primitives"][0];
+        const auto & primitive = root["meshes"][root["nodes"][named("Left", true)]["mesh"].get<std::size_t>()]["primitives"][0];
         const auto & accessor = root["accessors"][primitive["attributes"]["NORMAL"].get<std::size_t>()];
         const auto & view = root["bufferViews"][accessor["bufferView"].get<std::size_t>()];
         std::uint32_t json_size = 0;
@@ -294,6 +301,50 @@ int main() {
         if (!rigged) { std::fprintf(stderr, "turned writer: %s\n", rigged.error().message.c_str()); return 1; }
         auto back = skintokens::load_glb_memory(*rigged);
         CHECK(back && back->vertices.size() == 3U && same(back->vertices[2], 0, 1, 0));
+
+        // The new skin replaces the old skeleton. Old joints and emptied mesh nodes with nothing
+        // below them go: a tool that reads every node under a skeleton makes each one a bone.
+        // A joint that holds a camera, or that an extension names, stays with its parents.
+        const std::string old_rig = R"({"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[0]}],
+"extensions":{"EXT_test":{"node":6}},
+"nodes":[{"name":"Armature","children":[1,4]},
+ {"name":"OldHips","translation":[0,1,0],"children":[2,3,6]},{"name":"OldTwist"},
+ {"name":"Socket","translation":[0,0.5,0],"children":[5]},{"name":"Body","mesh":0,"skin":0},
+ {"name":"Cam","camera":0},{"name":"Anchored"}],
+"cameras":[{"type":"perspective","perspective":{"yfov":0.8,"znear":0.1}}],
+"skins":[{"joints":[1,2,3,6]}],
+"meshes":[{"primitives":[{"attributes":{"POSITION":0,"JOINTS_0":1,"WEIGHTS_0":2},"indices":3}]}],
+"accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3"},
+ {"bufferView":1,"componentType":5121,"count":3,"type":"VEC4"},
+ {"bufferView":2,"componentType":5126,"count":3,"type":"VEC4"},
+ {"bufferView":3,"componentType":5123,"count":3,"type":"SCALAR"}],
+"bufferViews":[{"buffer":0,"byteOffset":0,"byteLength":36},{"buffer":0,"byteOffset":36,"byteLength":12},
+ {"buffer":0,"byteOffset":48,"byteLength":48},{"buffer":0,"byteOffset":96,"byteLength":6}],
+"buffers":[{"byteLength":104}]})";
+        auto pruned = skintokens::save_rigged_source_glb_memory(pack(old_rig, bin), one, still);
+        if (!pruned) { std::fprintf(stderr, "old rig writer: %s\n", pruned.error().message.c_str()); return 1; }
+        const json p = read_json(*pruned);
+        const auto & nodes = p["nodes"];
+        const auto find = [&](std::string_view name) {
+            std::size_t hits = 0, at = 0;
+            for (std::size_t i = 0; i < nodes.size(); ++i)
+                if (nodes[i].value("name", "") == name) { ++hits; at = i; }
+            return hits == 1U ? at : nodes.size();
+        };
+        CHECK(find("OldTwist") == nodes.size());          // an old joint with nothing below it
+        std::size_t bodies = 0;
+        for (const auto & node : nodes) if (node.value("name", "") == "Body") { ++bodies; CHECK(node.contains("skin")); }
+        CHECK(bodies == 1U);                               // the emptied mesh node went, the skinned one stays
+        CHECK(find("Cam") < nodes.size() && find("Socket") < nodes.size() && find("OldHips") < nodes.size());
+        CHECK(find("Anchored") < nodes.size() && p["extensions"]["EXT_test"]["node"] == find("Anchored"));
+        CHECK(nodes[find("Socket")]["children"] == json::array({find("Cam")}));
+        CHECK(nodes.size() == 7U);   // Armature, OldHips, Socket, Cam, Anchored, Hips, Body
+        for (const auto & node : nodes)
+            for (const auto & child : node.value("children", json::array())) CHECK(child.get<std::size_t>() < nodes.size());
+        CHECK(p["skins"][0]["joints"] == json::array({find("Hips")}) && p["skins"][0]["skeleton"] == find("Hips"));
+        for (const auto & channel : p["animations"][0]["channels"]) CHECK(channel["target"]["node"] == find("Hips"));
+        auto reread = skintokens::load_glb_memory(*pruned);
+        CHECK(reread && reread->vertices.size() == 3U);
     }
 
     // A binding for a different mesh is refused.
