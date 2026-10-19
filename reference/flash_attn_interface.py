@@ -13,8 +13,9 @@ import torch
 import torch.nn.functional as F
 
 
-def flash_attn_func(query: torch.Tensor, key: torch.Tensor, value: torch.Tensor,
-                    *args, **kwargs):
+def flash_attn_func(
+    query: torch.Tensor, key: torch.Tensor, value: torch.Tensor, *args, **kwargs
+):
     query = query.transpose(1, 2)
     key = key.transpose(1, 2)
     value = value.transpose(1, 2)

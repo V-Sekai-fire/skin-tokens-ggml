@@ -13,7 +13,7 @@
 
 namespace {
 int failures = 0;
-void check(bool ok, const char * what) {
+void check(bool ok, const char *what) {
     std::printf("%s %s\n", ok ? "PASS" : "FAIL", what);
     if (!ok) ++failures;
 }
@@ -50,13 +50,13 @@ int main() {
     auto loop = skintokens::cut_clip(swing(180, 33.0F, false), clip_cut::loop, 1.1F);
     check(loop.has_value(), "loop cut succeeds");
     if (loop) {
-        const auto & [m, r] = *loop;
+        const auto &[m, r] = *loop;
         std::printf("  start %zu frames %zu seam %.3f deg travel %.3f m/s\n", r.start, r.frames,
-                    r.seam_after_max_degrees, r.travel_removed_metres_per_second);
+            r.seam_after_max_degrees, r.travel_removed_metres_per_second);
         check(r.frames == 33U, "loop length is the swing period (33 frames)");
         check(r.start >= 30U && r.start + r.frames <= 135U, "loop lies in the steady part");
         check(m.frames == r.frames + 1U, "frame 0 is repeated at the end");
-        const auto & q0 = m.local_rotations.front(), & qe = m.local_rotations[r.frames * 3U];
+        const auto &q0 = m.local_rotations.front(), &qe = m.local_rotations[r.frames * 3U];
         check(q0.x == qe.x && q0.w == qe.w, "the last frame equals the first");
         check(std::abs(m.root_translations.back().z - m.root_translations.front().z) < 1e-4F, "the root ends where it starts");
         check(std::abs(r.travel_removed_metres_per_second - 1.5F) < 0.05F, "removed travel is the walk speed");

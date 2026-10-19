@@ -10,16 +10,17 @@
 
 namespace {
 
-template<class T> void append(std::vector<std::byte> & output, const T & value) {
+template<class T>
+void append(std::vector<std::byte> &output, const T &value) {
     const auto offset = output.size();
     output.resize(offset + sizeof(T));
     std::memcpy(output.data() + offset, &value, sizeof(T));
 }
 
-void write_import_fixture(const std::filesystem::path & path) {
-    const float positions[] = {0,0,0, 1,0,0, 0,1,0};
-    const std::uint16_t colors[] = {65535,0,0,65535, 0,65535,0,65535, 0,0,65535,65535};
-    const std::uint16_t indices[] = {0,1,2};
+void write_import_fixture(const std::filesystem::path &path) {
+    const float positions[] = {0, 0, 0, 1, 0, 0, 0, 1, 0};
+    const std::uint16_t colors[] = {65535, 0, 0, 65535, 0, 65535, 0, 65535, 0, 0, 65535, 65535};
+    const std::uint16_t indices[] = {0, 1, 2};
     std::vector<std::byte> binary;
     for (float value : positions) append(binary, value);
     for (std::uint16_t value : colors) append(binary, value);
@@ -29,38 +30,43 @@ void write_import_fixture(const std::filesystem::path & path) {
     while (json.size() % 4U) json.push_back(' ');
     std::ofstream stream(path, std::ios::binary | std::ios::trunc);
     const auto write_u32 = [&](std::uint32_t value) { stream.write(reinterpret_cast<const char *>(&value), 4); };
-    write_u32(0x46546C67U); write_u32(2U);
+    write_u32(0x46546C67U);
+    write_u32(2U);
     write_u32(static_cast<std::uint32_t>(12U + 8U + json.size() + 8U + binary.size()));
-    write_u32(static_cast<std::uint32_t>(json.size())); write_u32(0x4E4F534AU);
+    write_u32(static_cast<std::uint32_t>(json.size()));
+    write_u32(0x4E4F534AU);
     stream.write(json.data(), static_cast<std::streamsize>(json.size()));
-    write_u32(static_cast<std::uint32_t>(binary.size())); write_u32(0x004E4942U);
+    write_u32(static_cast<std::uint32_t>(binary.size()));
+    write_u32(0x004E4942U);
     stream.write(reinterpret_cast<const char *>(binary.data()), static_cast<std::streamsize>(binary.size()));
 }
 
-void write_trellis_fixture(const std::filesystem::path & path) {
+void write_trellis_fixture(const std::filesystem::path &path) {
     std::ofstream stream(path, std::ios::binary | std::ios::trunc);
     stream.write("T2MESH03", 8);
     const std::uint32_t vertices = 3U, triangles = 1U;
     stream.write(reinterpret_cast<const char *>(&vertices), 4);
     stream.write(reinterpret_cast<const char *>(&triangles), 4);
-    const float positions[] = {1,2,3, 4,5,6, 7,8,9};
-    const float normals[] = {0,0,1, 0,0,1, 0,0,1};
-    const float pbr[] = {1,0,0,.2F,.3F,1, 0,1,0,.4F,.5F,1, 0,0,1,.6F,.7F,1};
-    const std::int32_t indices[] = {0,1,2};
+    const float positions[] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+    const float normals[] = {0, 0, 1, 0, 0, 1, 0, 0, 1};
+    const float pbr[] = {1, 0, 0, .2F, .3F, 1, 0, 1, 0, .4F, .5F, 1, 0, 0, 1, .6F, .7F, 1};
+    const std::int32_t indices[] = {0, 1, 2};
     stream.write(reinterpret_cast<const char *>(positions), sizeof(positions));
     stream.write(reinterpret_cast<const char *>(normals), sizeof(normals));
     stream.write(reinterpret_cast<const char *>(pbr), sizeof(pbr));
     stream.write(reinterpret_cast<const char *>(indices), sizeof(indices));
 }
 
-void write_static_skeleton_fixture(const std::filesystem::path & path) {
+void write_static_skeleton_fixture(const std::filesystem::path &path) {
     std::string json = R"({"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[0,2]}],"nodes":[{"name":"Hips","translation":[0,1,0],"children":[1]},{"name":"Spine1","translation":[0,0.4,0]},{"name":"MeshNode","mesh":0,"skin":0}],"meshes":[{"primitives":[]}],"skins":[{"skeleton":0,"joints":[1,0]}]})";
     while (json.size() % 4U) json.push_back(' ');
     std::ofstream stream(path, std::ios::binary | std::ios::trunc);
     const auto write_u32 = [&](std::uint32_t value) { stream.write(reinterpret_cast<const char *>(&value), 4); };
-    write_u32(0x46546C67U); write_u32(2U);
+    write_u32(0x46546C67U);
+    write_u32(2U);
     write_u32(static_cast<std::uint32_t>(12U + 8U + json.size()));
-    write_u32(static_cast<std::uint32_t>(json.size())); write_u32(0x4E4F534AU);
+    write_u32(static_cast<std::uint32_t>(json.size()));
+    write_u32(0x4E4F534AU);
     stream.write(json.data(), static_cast<std::streamsize>(json.size()));
 }
 
@@ -78,7 +84,7 @@ int main() {
     geometry.vertices = {{-0.5F, 0.0F, 0.0F}, {0.5F, 0.0F, 0.0F}, {0.0F, 1.0F, 0.0F}};
     geometry.normals = {{0.0F, 0.0F, 1.0F}, {0.0F, 0.0F, 1.0F}, {0.0F, 0.0F, 1.0F}};
     geometry.colors = {{1.0F, 0.0F, 0.0F, 1.0F}, {0.0F, 1.0F, 0.0F, 1.0F},
-                       {0.0F, 0.0F, 1.0F, 1.0F}};
+        {0.0F, 0.0F, 1.0F, 1.0F}};
     geometry.faces = {{{0U, 1U, 2U}}};
     skintokens::skin binding;
     binding.rig.names = {"root", "tip"};
@@ -101,7 +107,7 @@ int main() {
     skintokens::skin lbs_binding = binding;
     lbs_binding.joints = {{0U, 0U, 0U, 0U}, {1U, 0U, 0U, 0U}, {0U, 1U, 0U, 0U}};
     lbs_binding.weights = {{1.0F, 0.0F, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F, 0.0F},
-                           {0.5F, 0.5F, 0.0F, 0.0F}};
+        {0.5F, 0.5F, 0.0F, 0.0F}};
     skintokens::motion lbs_animation = animation;
     lbs_animation.root_translations[1] = {1.0F, 0.0F, 0.0F};
     constexpr float half_sqrt_two = 0.7071067811865475F;
@@ -145,7 +151,7 @@ int main() {
     assert(close(fitted_soma->rig.rest_positions[2].y, fitted_soma->rig.rest_positions[3].y));
     const auto distance = [](skintokens::vec3 left, skintokens::vec3 right) {
         const float x = left.x - right.x, y = left.y - right.y, z = left.z - right.z;
-        return std::sqrt(x*x + y*y + z*z);
+        return std::sqrt(x * x + y * y + z * z);
     };
     const float global_upper = distance(fitted_soma->rig.rest_positions[1], fitted_soma->rig.rest_positions[2]);
     const float global_lower = distance(fitted_soma->rig.rest_positions[2], fitted_soma->rig.rest_positions[3]);
@@ -156,11 +162,11 @@ int main() {
     assert(articulated_soma->rig.rest_positions[2].y < articulated_soma->rig.rest_positions[1].y);
     assert(articulated_soma->rig.rest_positions[3].y < articulated_soma->rig.rest_positions[2].y);
     assert(close(distance(articulated_soma->rig.rest_positions[1], articulated_soma->rig.rest_positions[2]),
-                 global_upper));
+        global_upper));
     assert(close(distance(articulated_soma->rig.rest_positions[2], articulated_soma->rig.rest_positions[3]),
-                 global_lower));
+        global_lower));
     assert(close(distance(articulated_soma->rig.rest_positions[3], articulated_soma->rig.rest_positions[4]),
-                 global_hand));
+        global_hand));
     // Changing the articulated bind offsets must not double-apply that pose to
     // the animation. With identity source rotations, the rest-frame transfer
     // maps the articulated rig back onto the original global-fit trajectory.
@@ -210,14 +216,14 @@ int main() {
     // leaves the mesh undeformed instead of snapping it out of the T-pose.
     skintokens::mesh lowered_arm_geometry;
     lowered_arm_geometry.vertices = {{-0.1F, 0.0F, 0.0F}, {0.1F, 0.0F, 0.0F},
-                                     {0.1F, 1.0F, 0.0F}, {-0.1F, 1.0F, 0.0F}};
+        {0.1F, 1.0F, 0.0F}, {-0.1F, 1.0F, 0.0F}};
     lowered_arm_geometry.faces = {{{0U, 1U, 2U}}, {{0U, 2U, 3U}}};
     skintokens::motion lowered_animation;
     lowered_animation.frames = 1U;
     lowered_animation.rig.names = {"Hips", "LeftArm", "LeftForeArm", "LeftHand"};
     lowered_animation.rig.parents = {-1, 0, 1, 2};
     lowered_animation.rig.rest_positions = {{0.0F, 0.0F, 0.0F}, {0.0F, 1.0F, 0.0F},
-                                            {0.5F, 1.0F, 0.0F}, {1.0F, 1.0F, 0.0F}};
+        {0.5F, 1.0F, 0.0F}, {1.0F, 1.0F, 0.0F}};
     lowered_animation.root_translations = {{0.0F, 0.0F, 0.0F}};
     lowered_animation.local_rotations.assign(4U, {});
     lowered_animation.local_rotations[1] = {0.0F, 0.0F, -half_sqrt_two, half_sqrt_two};
@@ -244,7 +250,8 @@ int main() {
     assert(adopted_frame_zero && adopted_frame_zero->size() == adopted->rig.rest_positions.size());
     for (std::size_t joint_index = 0; joint_index < adopted_frame_zero->size(); ++joint_index)
         assert(close(distance((*adopted_frame_zero)[joint_index],
-                              adopted->rig.rest_positions[joint_index]), 0.0F));
+                         adopted->rig.rest_positions[joint_index]),
+            0.0F));
     skintokens::skeleton generated_rig;
     generated_rig.names = {"bone_0", "bone_1", "bone_2"};
     generated_rig.parents = {-1, 0, 1};
@@ -260,19 +267,19 @@ int main() {
     skintokens::motion soma30;
     soma30.frames = 2U;
     soma30.frames_per_second = 30.0F;
-    soma30.rig.names = {"Hips","Spine1","Spine2","Chest","Neck1","Neck2","Head","Jaw","LeftEye","RightEye",
-        "LeftShoulder","LeftArm","LeftForeArm","LeftHand","LeftHandThumbEnd","LeftHandMiddleEnd",
-        "RightShoulder","RightArm","RightForeArm","RightHand","RightHandThumbEnd","RightHandMiddleEnd",
-        "LeftLeg","LeftShin","LeftFoot","LeftToeBase","RightLeg","RightShin","RightFoot","RightToeBase"};
-    soma30.rig.parents = {-1,0,1,2,3,4,5,6,6,6,3,10,11,12,13,13,3,16,17,18,19,19,0,22,23,24,0,26,27,28};
-    soma30.rig.rest_positions = {{0,1,0},{0,1.15F,0},{0,1.3F,0},{0,1.45F,0},{0,1.58F,0},{0,1.66F,0},{0,1.78F,0},
-        {0,1.72F,.04F},{-.03F,1.8F,.08F},{.03F,1.8F,.08F},{-.12F,1.46F,0},{-.35F,1.44F,0},{-.58F,1.35F,0},
-        {-.74F,1.25F,0},{-.84F,1.2F,.05F},{-.9F,1.2F,0},{.12F,1.46F,0},{.35F,1.44F,0},{.58F,1.35F,0},
-        {.74F,1.25F,0},{.84F,1.2F,.05F},{.9F,1.2F,0},{-.12F,.92F,0},{-.13F,.5F,0},{-.13F,.12F,.02F},
-        {-.13F,.03F,.18F},{.12F,.92F,0},{.13F,.5F,0},{.13F,.12F,.02F},{.13F,.03F,.18F}};
+    soma30.rig.names = {"Hips", "Spine1", "Spine2", "Chest", "Neck1", "Neck2", "Head", "Jaw", "LeftEye", "RightEye",
+        "LeftShoulder", "LeftArm", "LeftForeArm", "LeftHand", "LeftHandThumbEnd", "LeftHandMiddleEnd",
+        "RightShoulder", "RightArm", "RightForeArm", "RightHand", "RightHandThumbEnd", "RightHandMiddleEnd",
+        "LeftLeg", "LeftShin", "LeftFoot", "LeftToeBase", "RightLeg", "RightShin", "RightFoot", "RightToeBase"};
+    soma30.rig.parents = {-1, 0, 1, 2, 3, 4, 5, 6, 6, 6, 3, 10, 11, 12, 13, 13, 3, 16, 17, 18, 19, 19, 0, 22, 23, 24, 0, 26, 27, 28};
+    soma30.rig.rest_positions = {{0, 1, 0}, {0, 1.15F, 0}, {0, 1.3F, 0}, {0, 1.45F, 0}, {0, 1.58F, 0}, {0, 1.66F, 0}, {0, 1.78F, 0},
+        {0, 1.72F, .04F}, {-.03F, 1.8F, .08F}, {.03F, 1.8F, .08F}, {-.12F, 1.46F, 0}, {-.35F, 1.44F, 0}, {-.58F, 1.35F, 0},
+        {-.74F, 1.25F, 0}, {-.84F, 1.2F, .05F}, {-.9F, 1.2F, 0}, {.12F, 1.46F, 0}, {.35F, 1.44F, 0}, {.58F, 1.35F, 0},
+        {.74F, 1.25F, 0}, {.84F, 1.2F, .05F}, {.9F, 1.2F, 0}, {-.12F, .92F, 0}, {-.13F, .5F, 0}, {-.13F, .12F, .02F},
+        {-.13F, .03F, .18F}, {.12F, .92F, 0}, {.13F, .5F, 0}, {.13F, .12F, .02F}, {.13F, .03F, .18F}};
     soma30.root_translations = {soma30.rig.rest_positions.front(), soma30.rig.rest_positions.front()};
     soma30.local_rotations.assign(soma30.frames * soma30.rig.names.size(), {});
-    soma30.local_rotations[soma30.rig.names.size() + 11U] = {0,0,half_sqrt_two,half_sqrt_two};
+    soma30.local_rotations[soma30.rig.names.size() + 11U] = {0, 0, half_sqrt_two, half_sqrt_two};
     auto mixamo52 = skintokens::make_mixamo52_rig(soma30.rig);
     assert(mixamo52 && mixamo52->names.size() == 52U);
     assert(mixamo52->names.front() == "mixamorig:Hips");
@@ -308,26 +315,26 @@ int main() {
     // The JSON the viewer reads: 22 roles on a pass; sides follow the feet's facing, not +X;
     // a rig upside down fails the upright gate.
     const std::string roles_json = skintokens::humanoid_roles_json(flexible_generated);
-    const auto count_pairs = [](const std::string & text) {
+    const auto count_pairs = [](const std::string &text) {
         std::size_t n = 0;
         for (auto at = text.find("\":\""); at != std::string::npos; at = text.find("\":\"", at + 1)) ++n;
         return n;
     };
     assert(roles_json.starts_with("{\"gates\":\"pass\",\"roles\":{"));
     assert(count_pairs(roles_json) == 1U + 22U);
-    const auto role_of = [](const std::string & text, const std::string & role) {
+    const auto role_of = [](const std::string &text, const std::string &role) {
         const auto key = "\"" + role + "\":\"";
         const auto at = text.find(key);
         assert(at != std::string::npos);
         return text.substr(at + key.size(), text.find('"', at + key.size()) - at - key.size());
     };
     auto facing_back = flexible_generated;
-    for (auto & p : facing_back.rest_positions) p.z = -p.z;
+    for (auto &p : facing_back.rest_positions) p.z = -p.z;
     const std::string back_json = skintokens::humanoid_roles_json(facing_back);
     assert(back_json.starts_with("{\"gates\":\"pass\""));
     assert(role_of(back_json, "left_hand") == role_of(roles_json, "right_hand"));
     auto upside_down = flexible_generated;
-    for (auto & p : upside_down.rest_positions) p.y = -p.y;
+    for (auto &p : upside_down.rest_positions) p.y = -p.y;
     const std::string down_json = skintokens::humanoid_roles_json(upside_down);
     assert(down_json.starts_with("{\"gates\":\"fail\""));
     auto generated_motion = skintokens::retarget_soma30_motion_to_generated(
@@ -342,16 +349,15 @@ int main() {
     assert(generated_divergence->worst_frame < soma30.frames);
     const auto generated_left_arm = static_cast<std::size_t>(generated_match->soma_to_generated[11U]);
     assert(close(generated_motion->local_rotations[flexible_generated.names.size() + generated_left_arm].z,
-                 half_sqrt_two));
+        half_sqrt_two));
     // An isolated upper-arm track must not manufacture forearm or hand local
     // rotations merely because their target rest-bone directions differ.
     const auto generated_left_forearm = static_cast<std::size_t>(generated_match->soma_to_generated[12U]);
     const auto generated_left_hand_core = static_cast<std::size_t>(generated_match->soma_to_generated[13U]);
     for (const auto joint : {generated_left_forearm, generated_left_hand_core}) {
-        const auto & local = generated_motion->local_rotations[
-            flexible_generated.names.size() + joint];
+        const auto &local = generated_motion->local_rotations[flexible_generated.names.size() + joint];
         assert(close(local.x, 0.0F) && close(local.y, 0.0F) &&
-               close(local.z, 0.0F) && close(local.w, 1.0F));
+            close(local.z, 0.0F) && close(local.w, 1.0F));
     }
     skintokens::motion soma30_fingers = soma30;
     soma30_fingers.local_rotations[soma30.rig.names.size() + 14U] =
@@ -369,8 +375,7 @@ int main() {
             break;
         }
     assert(generated_finger < flexible_generated.names.size());
-    assert(std::abs(finger_motion->local_rotations[
-        flexible_generated.names.size() + generated_finger].w) < 0.999F);
+    assert(std::abs(finger_motion->local_rotations[flexible_generated.names.size() + generated_finger].w) < 0.999F);
     skintokens::mesh generated_points;
     generated_points.vertices = flexible_generated.rest_positions;
     skintokens::skin generated_binding;
@@ -440,11 +445,11 @@ int main() {
         std::ifstream written(output, std::ios::binary);
         const std::vector<char> on_disk{std::istreambuf_iterator<char>(written), {}};
         assert(on_disk.size() == in_memory->size() &&
-               std::memcmp(on_disk.data(), in_memory->data(), on_disk.size()) == 0);
+            std::memcmp(on_disk.data(), in_memory->data(), on_disk.size()) == 0);
     }
     auto from_memory = skintokens::load_glb_memory(*in_memory);
     assert(from_memory && from_memory->vertices.size() == loaded->vertices.size() &&
-           from_memory->faces == loaded->faces);
+        from_memory->faces == loaded->faces);
     auto damaged = *in_memory;
     damaged[0] = std::byte{0};
     assert(!skintokens::load_glb_memory(damaged));

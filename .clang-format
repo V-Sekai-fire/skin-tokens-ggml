@@ -1,0 +1,25 @@
+# Matches the hand formatting this code already had, so clang-format
+# changes as little as it can. ggml/ is vendored and is not formatted.
+---
+Language: Cpp
+BasedOnStyle: Google
+IndentWidth: 4
+ColumnLimit: 0
+AccessModifierOffset: -4
+PointerAlignment: Right
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+AllowShortBlocksOnASingleLine: Always
+SortIncludes: Never
+FixNamespaceComments: false
+AlignAfterOpenBracket: DontAlign
+SpacesBeforeTrailingComments: 1
+PackConstructorInitializers: BinPack
+IndentCaseLabels: false
+LambdaBodyIndentation: OuterScope
+AllowShortCaseLabelsOnASingleLine: true
+AlignTrailingComments: false
+SpaceAfterTemplateKeyword: false
+SpaceAfterCStyleCast: true
+BreakBeforeTernaryOperators: false
+AlignOperands: DontAlign
+...

@@ -17,7 +17,7 @@
 namespace {
 
 template<class T>
-std::vector<T> read_array(const std::filesystem::path & path, std::size_t count) {
+std::vector<T> read_array(const std::filesystem::path &path, std::size_t count) {
     if (count > std::numeric_limits<std::size_t>::max() / sizeof(T))
         throw std::runtime_error("fixture array size overflows");
     const auto bytes = count * sizeof(T);
@@ -43,14 +43,14 @@ std::size_t product(std::initializer_list<std::size_t> values) {
 }
 
 template<class T>
-std::vector<T> required_array(const std::filesystem::path & directory, std::string_view name,
-                              std::size_t count) {
+std::vector<T> required_array(const std::filesystem::path &directory, std::string_view name,
+    std::size_t count) {
     return read_array<T>(directory / name, count);
 }
 
 } // namespace
 
-int main(int argc, char ** argv) try {
+int main(int argc, char **argv) try {
     if (argc != 2) {
         std::cerr << "usage: skintokens-animation-parity FIXTURE_DIR\n";
         return 2;
@@ -78,9 +78,9 @@ int main(int argc, char ** argv) try {
     const auto rest = required_array<float>(directory, "rest-positions.f32", product({joint_count, 3U}));
     const auto roots = required_array<float>(directory, "root-translations.f32", product({frame_count, 3U}));
     const auto rotations = required_array<float>(directory, "local-rotations.f32",
-                                                  product({frame_count, joint_count, 4U}));
+        product({frame_count, joint_count, 4U}));
     const auto expected = required_array<float>(directory, "expected-vertices.f32",
-                                                 product({selected.size(), vertex_count, 3U}));
+        product({selected.size(), vertex_count, 3U}));
 
     bool passed = true;
     if (std::filesystem::exists(directory / "reference-joints.u16") ||
@@ -133,7 +133,7 @@ int main(int argc, char ** argv) try {
         const double exact_limit = manifest.value("binding_exact_top4_tolerance", 0.98);
         const double slot_limit = manifest.value("binding_shared_top4_tolerance", 0.995);
         const bool binding_passed = maximum <= maximum_limit && relative <= relative_limit &&
-                                    exact_fraction >= exact_limit && slot_fraction >= slot_limit;
+            exact_fraction >= exact_limit && slot_fraction >= slot_limit;
         std::cout << "binding max_abs=" << maximum << " relative_l2=" << relative
                   << " exact_top4_vertices=" << exact_fraction
                   << " shared_top4_slots=" << slot_fraction
@@ -198,7 +198,10 @@ int main(int argc, char ** argv) try {
                 const auto expected_index = (selected_index * vertex_count + vertex) * 3U + axis;
                 const double difference = static_cast<double>(values[axis]) - expected[expected_index];
                 const double absolute = std::abs(difference);
-                if (absolute > frame_max) { frame_max = absolute; worst_vertex = vertex; }
+                if (absolute > frame_max) {
+                    frame_max = absolute;
+                    worst_vertex = vertex;
+                }
                 frame_numerator += difference * difference;
                 frame_denominator += static_cast<double>(expected[expected_index]) * expected[expected_index];
             }
@@ -216,7 +219,7 @@ int main(int argc, char ** argv) try {
     std::cout << "overall max_abs=" << global_max << " relative_l2=" << global_relative
               << " result=" << (passed ? "PASS" : "FAIL") << '\n';
     return passed ? 0 : 1;
-} catch (const std::exception & exception) {
+} catch (const std::exception &exception) {
     std::cerr << "animation parity: " << exception.what() << '\n';
     return 2;
 }

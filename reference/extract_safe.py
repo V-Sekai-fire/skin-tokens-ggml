@@ -42,7 +42,8 @@ def extract(path: Path) -> tuple[dict[str, torch.Tensor], dict[str, Any]]:
         # GGUF records both named tensors explicitly and the normal converter
         # must never depend on pickle/model-class knowledge to reconstruct it.
         str(name): tensor.detach().cpu().contiguous().clone()
-        for name, tensor in state.items() if isinstance(tensor, torch.Tensor)
+        for name, tensor in state.items()
+        if isinstance(tensor, torch.Tensor)
     }
     if not tensors:
         raise ValueError(f"{path} contains no tensors")
@@ -62,7 +63,8 @@ def main() -> None:
     save_file(skin_vae, args.output / "skin-vae.safetensors")
     config = {"tokenrig": tokenrig_config, "skin_vae": skin_vae_config}
     (args.output / "config.json").write_text(
-        json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     print(f"extracted {len(tokenrig)} TokenRig and {len(skin_vae)} SkinVAE tensors")
 
 

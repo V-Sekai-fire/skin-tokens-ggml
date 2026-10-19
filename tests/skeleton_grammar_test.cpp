@@ -7,12 +7,18 @@
 #include <cstdio>
 #include <vector>
 
-#define CHECK(cond) do { if (!(cond)) { std::fprintf(stderr, "FAIL %s:%d %s\n", __FILE__, __LINE__, #cond); return 1; } } while (0)
+#define CHECK(cond)                                                             \
+    do {                                                                        \
+        if (!(cond)) {                                                          \
+            std::fprintf(stderr, "FAIL %s:%d %s\n", __FILE__, __LINE__, #cond); \
+            return 1;                                                           \
+        }                                                                       \
+    } while (0)
 
 int main() {
     using namespace skintokens::detail;
-    const auto has = [](const std::vector<std::int32_t> & v, std::int32_t t) { return std::find(v.begin(), v.end(), t) != v.end(); };
-    std::vector<std::int32_t> tokens{257, 266};  // BOS, class
+    const auto has = [](const std::vector<std::int32_t> &v, std::int32_t t) { return std::find(v.begin(), v.end(), t) != v.end(); };
+    std::vector<std::int32_t> tokens{257, 266}; // BOS, class
     for (std::size_t joint = 0; joint + 1U < max_skeleton_joints; ++joint) tokens.insert(tokens.end(), {1, 2, 3});
     // Control: below the cap a skeleton may add a joint, a part, a branch, or end.
     auto parsed = parse_skeleton(tokens);
