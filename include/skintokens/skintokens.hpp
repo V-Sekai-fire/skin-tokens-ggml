@@ -391,7 +391,8 @@ private:
 // passes the humanoid match, at twist_fractions() of the segment, children of the segment's start
 // joint and named "<start>Twist1".."<start>Twist4". The start joint's skin weight is split among
 // them by where each vertex lies along the segment (a ggml graph on runtime's device); each vertex
-// keeps its four largest weights. A clip turns helper k about the segment by fraction k of the end
+// keeps every other joint's weight within four slots. A segment keeps its helpers only when a
+// twist sweep on the device shows they shrink fewer triangles (see twist_check). A clip turns helper k about the segment by fraction k of the end
 // joint's twist; a reverse (upper) segment also undoes (1 - fraction k) of the start joint's own
 // twist relative to its parent.
 inline constexpr std::size_t twist_helpers_per_segment = 4U;
@@ -402,15 +403,25 @@ struct twist_segment {
     bool reverse = false;
     std::array<std::int32_t, twist_helpers_per_segment> helpers{};
 };
+// How a segment's helpers did at rig time: the worst 1st-percentile triangle area ratio (1 = no
+// shrink) while its twist joint turns through +-45 and +-90 degrees, without and with helpers.
+struct twist_check {
+    std::int32_t start = -1;
+    float plain = 0.0F;
+    float twisted = 0.0F;
+    bool kept = false;
+};
 struct twist_rig {
     skin binding;
     std::vector<twist_segment> segments;
     // Per vertex, per segment, per helper: the share of the start joint's weight (sums to 1).
     std::vector<float> shares;
+    // Every candidate segment, kept or not. Only segments whose helpers lower the error stay.
+    std::vector<twist_check> checks;
 };
 [[nodiscard]] SKINTOKENS_API const std::array<float, twist_helpers_per_segment> & twist_fractions();
 [[nodiscard]] SKINTOKENS_API result<twist_rig> add_twist_joints(
-    const mesh & geometry, const skin & binding, const runtime_options & runtime = {});
+    const mesh & geometry, const skin & binding, const runtime_options & runtime = {}, bool check = true);
 
 // Transfers SOMA30 motion onto the generated hierarchy. The target hierarchy,
 // bind pose, and learned skin weights are not modified.
