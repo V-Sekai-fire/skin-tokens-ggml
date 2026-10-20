@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SkinTokens</title>
+<link rel="icon" href="data:,">
+<script src="https://cdn.jsdelivr.net/npm/@appsignal/browser@1.0.0-beta.7/dist/browser.umd.js" crossorigin="anonymous"></script>
+<script>
+try { AppsignalBrowser.init({ key: "43d19674-b7e6-4d77-aae1-edf73c7088c3", endpoint: "https://appsignal-endpoint.net", active: true, appVersion: "dev" }); } catch (e) {}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Marcellus&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet" crossorigin="anonymous">
+<style>
+/* Paper and ink: the viewer's studio colours. One slide at a time; arrow keys, space or the dots move. */
+:root{
+  --paper:#eeeeeb; --paper-2:#e4e4e0; --card:#fbfbf9; --line:#c8c8c2;
+  --ink:#222; --mute:#767676; --lit:#2878d9;
+  --serif:'Marcellus',Georgia,serif; --sans:'IBM Plex Sans',Helvetica,Arial,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--paper);color:var(--ink);font-family:var(--sans);overflow:hidden}
+#stage{position:relative;height:100%}
+.slide{position:absolute;inset:0;padding:7vh 7vw 11vh;display:none;flex-direction:column;gap:2.4vh;overflow:auto}
+.slide.on{display:flex;animation:rise .4s ease}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}}
+h1,h2{font-family:var(--serif);font-weight:400;margin:0;letter-spacing:.01em}
+h1{font-size:clamp(44px,7vw,96px);line-height:1}
+h2{font-size:clamp(30px,4vw,54px)}
+.kicker{font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--mute)}
+p.lede{max-width:62ch;font-size:clamp(15px,1.5vw,20px);line-height:1.55;color:#444;margin:0}
+.row{display:flex;gap:2vw;flex-wrap:wrap;align-items:stretch}
+.card{flex:1 1 240px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+.card h3{font-family:var(--serif);font-weight:400;font-size:24px;margin:0 0 4px}
+.lab{font-size:13px;color:var(--mute)}
+.btn{display:inline-block;background:var(--ink);color:var(--paper);text-decoration:none;border-radius:8px;padding:10px 16px;font-family:var(--mono);font-size:14px;margin-top:10px}
+.btn:hover{background:var(--lit)}
+code,pre{font-family:var(--mono);font-size:13px}
+pre{background:var(--paper-2);border-radius:8px;padding:10px 12px;margin:10px 0 0;white-space:pre-wrap;word-break:break-all}
+.hash{font-family:var(--mono);font-size:10.5px;color:var(--mute);word-break:break-all;margin-top:10px}
+.shot{max-width:min(100%,1040px);border-radius:10px;border:1px solid var(--line);box-shadow:0 10px 40px rgba(0,0,0,.12);align-self:flex-start;max-height:58vh;object-fit:contain}
+table{border-collapse:collapse;max-width:620px;font-size:15px}
+td{padding:7px 12px;border-bottom:1px solid var(--line)}
+td:first-child{font-family:var(--mono);font-size:13px;white-space:nowrap}
+td:last-child{color:var(--mute)}
+ul{margin:0;padding-left:1.2em;line-height:1.7;max-width:70ch}
+a{color:var(--ink);text-decoration-color:var(--lit)}
+#nav{position:fixed;bottom:3.5vh;left:0;right:0;display:flex;justify-content:center;gap:10px;z-index:3}
+#nav b{width:10px;height:10px;border-radius:50%;border:1px solid var(--ink);cursor:pointer}
+#nav b.on{background:var(--ink)}
+#hint{position:fixed;bottom:3.5vh;left:3vw;font-family:var(--mono);font-size:11px;color:var(--mute);z-index:3}
+#mark{position:fixed;bottom:3.5vh;right:3vw;font-family:var(--serif);font-size:15px;z-index:3}
+@media (max-width:640px){.slide{padding:5vh 16px 13vh}}
+</style>
+</head>
+<body>
+<div id="stage">
+
+
+<section class="slide" id="download">
+  <div class="kicker">Viewer · macOS · Windows · Linux</div>
+  <h1>SkinTokens</h1>
+  <p class="lede">The viewer shows the meshes, materials, textures and animations in a 3D character file. It opens .glb, .gltf and .vrm files. Press R to rig a .glb file on your GPU, or to put a .vrm file in a T-pose. The viewer saves the result as <code>&lt;name&gt;.rigged.glb</code> or <code>&lt;name&gt;.tpose.vrm</code> in the folder of your file, and shows that path. Each file contains the program, <code>skintokens-viewer.pck</code>, the godot-sandbox file and the weights in the folder <code>w</code>. The program does not connect to other computers. Keep the files in one folder.</p>
+  <div class="row">
+    <div class="card"><h3>macOS</h3><p class="lab">Apple silicon · 1.3 GB</p>
+      <a class="btn" href="https://huggingface.co/chibifire/interactor-skintokens-viewer/resolve/main/skintokens-viewer-macos-arm64.zip?download=true" target="_blank" rel="noopener">Download for macOS</a>
+      <p class="lab" style="margin-top:12px">Apple did not notarize this program. Unzip the file. Remove the quarantine flag one time. Then start the program:</p>
+      <pre>cd skintokens-viewer-macos-arm64
+xattr -dr com.apple.quarantine .
+./skintokens-viewer</pre>
+      <div class="hash">SHA-256 51de1464d3540e9aa62749e0ded6e5a45d9c121255b0d3c84770b1fdd2c10e15</div></div>
+    <div class="card"><h3>Windows</h3><p class="lab">x86-64 · 1.3 GB</p>
+      <a class="btn" href="https://huggingface.co/chibifire/interactor-skintokens-viewer/resolve/main/skintokens-viewer-windows-x86_64.zip?download=true" target="_blank" rel="noopener">Download for Windows</a>
+      <p class="lab" style="margin-top:12px">Unzip the file. Start <code>skintokens-viewer.exe</code>. The program has no signature. If SmartScreen stops it, click “More info”. Then click “Run anyway”.</p>
+      <div class="hash">SHA-256 b68d022d2156b331400b4d22762e899c1e6391bf94f032ffdb3617144cbce8da</div></div>
+    <div class="card"><h3>Linux</h3><p class="lab">x86-64 · 1.4 GB</p>
+      <a class="btn" href="https://huggingface.co/chibifire/interactor-skintokens-viewer/resolve/main/skintokens-viewer-linux-x86_64.tar?download=true" target="_blank" rel="noopener">Download for Linux</a>
+      <pre>mkdir skintokens-viewer
+tar xf skintokens-viewer-linux-x86_64.tar -C skintokens-viewer
+cd skintokens-viewer
+./skintokens-viewer</pre>
+      <div class="hash">SHA-256 2327fba2778f0b9d2498f7675ca7bf36721c9c12dfe162bb4faab241524ead04</div></div>
+  </div>
+  <p class="lab">All three checksums: <a href="https://huggingface.co/chibifire/interactor-skintokens-viewer/resolve/main/SHA256SUMS" target="_blank" rel="noopener">SHA256SUMS</a>. The files are in <a href="https://huggingface.co/chibifire/interactor-skintokens-viewer" target="_blank" rel="noopener">chibifire/interactor-skintokens-viewer</a>.</p>
+</section>
+
+<section class="slide">
+  <div class="kicker">Open a model</div>
+  <h2>Drag and drop a file, or type its path</h2>
+  <div class="row">
+    <div class="card"><h3>Drag and drop</h3><p class="lab">Drag and drop a .glb, .gltf or .vrm file on the window. The viewer replaces the model on the screen with the new file.</p></div>
+    <div class="card"><h3>From a terminal</h3><p class="lab">Type the file path after the program name.</p><pre>skintokens-viewer /path/to/model.vrm</pre></div>
+  </div>
+  <div class="row">
+    <div class="card"><h3>Information</h3><p class="lab">The left panel shows all the meshes, materials, textures and animations in the file. Double-click a texture to see a large view of it.</p></div>
+    <div class="card"><h3>Keys</h3><p class="lab">Press W to show the wireframe. Press E to explode the model at its joints. Press G to remove the grid from the view.</p></div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Controls</div>
+  <h2>The controls card shows all the controls</h2>
+  <p class="lede">The viewer shows the controls card in the bottom-right corner when it starts. Press H to close the card. Press H again to show it.</p>
+  <table>
+    <tr><td>Right-drag</td><td>Orbit</td></tr>
+    <tr><td>Middle-drag</td><td>Pan</td></tr>
+    <tr><td>Scroll</td><td>Zoom</td></tr>
+    <tr><td>Click a mesh</td><td>Mesh details</td></tr>
+    <tr><td>W</td><td>Wireframe</td></tr>
+    <tr><td>E</td><td>Explode</td></tr>
+    <tr><td>G</td><td>Hide grid</td></tr>
+    <tr><td>R</td><td>Auto-rig a .glb, or put a .vrm in a T-pose (desktop viewers)</td></tr>
+    <tr><td>Esc</td><td>Close a popup</td></tr>
+    <tr><td>H</td><td>Show or close the controls card</td></tr>
+  </table>
+</section>
+
+<section class="slide">
+  <div class="kicker">Status</div>
+  <h2>The viewer and the auto-rig are available on the desktop</h2>
+  <ul>
+    <li>The desktop viewers rig a .glb file when you press R. On an NVIDIA RTX 4090 (Vulkan), the Windows file on this page gave a test character a rig. On an Apple M2 Pro (Metal), the macOS viewer gave the same character a rig. The two results are different by 0.000001 m or less.</li>
+    <li>When you press R on a .vrm file, the viewer keeps the skeleton of the file. It saves the file as VRM 1.0 in a T-pose, and turns each joint to point to the next joint. The macOS viewer did this for seven test files. The Windows file on this page did this for two test files.</li>
+    <li>There is no test result for the Linux viewer of this version.</li>
+    <li>At this time, the viewer does not open .usdz files.</li>
+    <li>At this time, the Linux and Windows versions have no test with a window.</li>
+  </ul>
+</section>
+
+<section class="slide">
+  <div class="kicker">Credits</div>
+  <h2>Open source parts</h2>
+  <ul>
+    <li><a href="https://github.com/V-Sekai-fire/entities-model-explorer">Model Explorer</a> (MIT License) is the viewer.</li>
+    <li><a href="https://godotengine.org">Godot Engine</a> (MIT License) is the engine of the program.</li>
+    <li><a href="https://huggingface.co/VAST-AI/SkinTokens">SkinTokens</a> by VAST-AI (MIT License) is the rig model. The weights in the desktop files are its BF16 GGUF files from <a href="https://huggingface.co/chibifire/SkinTokens-GGUF-BF16">chibifire/SkinTokens-GGUF-BF16</a>.</li>
+    <li><a href="https://github.com/V-Sekai-fire/skin-tokens-ggml">skin-tokens-ggml</a> (Apache License 2.0) is the rig program. <a href="https://github.com/V-Sekai-fire/contract-ggml-rd">ggml-rd</a> (MIT License) operates it on the GPU.</li>
+    <li>godot-sandbox (BSD 3-Clause License) operates the viewer scripts and the rig program as RISC-V guest programs.</li>
+    <li>godot-vrm and Godot-MToon-Shader (V-Sekai, MIT License) load VRM files and supply the toon shader.</li>
+  </ul>
+</section>
+
+</div>
+<div id="nav"></div>
+<div id="hint">← → or space</div>
+<div id="mark">&copy; 2026 chibifire</div>
+<script>
+const slides=[...document.querySelectorAll('.slide')], nav=document.getElementById('nav');
+let cur=0;
+slides.forEach((_,i)=>{const b=document.createElement('b');b.onclick=()=>show(i);nav.appendChild(b)});
+function show(i){cur=Math.max(0,Math.min(slides.length-1,i));slides.forEach((s,k)=>s.classList.toggle('on',k===cur));[...nav.children].forEach((b,k)=>b.classList.toggle('on',k===cur));history.replaceState(null,'','#'+(cur+1))}
+addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){show(cur+1);e.preventDefault()}else if(e.key==='ArrowLeft'||e.key==='PageUp'){show(cur-1);e.preventDefault()}});
+// A file dropped on the page would make the browser open it as a page: stop that.
+addEventListener('dragover',e=>e.preventDefault());addEventListener('drop',e=>e.preventDefault());
+addEventListener('hashchange',()=>{const k=slides.findIndex(x=>'#'+x.id===location.hash);if(k>=0)show(k)});
+let tx=null;addEventListener('touchstart',e=>tx=e.touches[0].clientX);addEventListener('touchend',e=>{if(tx===null)return;const d=e.changedTouches[0].clientX-tx;if(Math.abs(d)>50)show(cur+(d<0?1:-1));tx=null});
+const h=parseInt(location.hash.slice(1)),byId=slides.findIndex(x=>'#'+x.id===location.hash);show(byId>=0?byId:(h>0?h-1:0));
+</script>
+</body>
+</html>

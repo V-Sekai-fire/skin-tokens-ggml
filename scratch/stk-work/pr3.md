@@ -1,0 +1,1 @@
+With `opts trace=1`, the desktop host writes `<out>.stkt` from the guest's `skintokens_trace_chunk`. `skintokens-transfer-replay` reads that file to measure weight-transfer changes without rerunning the model.
