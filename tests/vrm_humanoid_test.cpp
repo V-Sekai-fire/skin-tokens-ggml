@@ -27,14 +27,27 @@ struct joint {
 skintokens::skeleton authored() {
     // Parents precede children, as the skeleton loader writes them.
     const std::vector<joint> joints{
-        {"Root", -1, {0, 0, 0}}, {"pelvis", 0, {0, 1, 0}}, {"skirt", 1, {0, .9F, .1F}},
-        {"tummy", 1, {0, 1.1F, 0}}, {"chest", 3, {0, 1.3F, 0}}, {"neck", 4, {0, 1.5F, 0}},
-        {"head", 5, {0, 1.6F, 0}}, {"shoulder.l", 4, {.1F, 1.45F, 0}}, {"arm.l", 7, {.2F, 1.45F, 0}},
-        {"forearm.l", 8, {.45F, 1.45F, 0}}, {"hand.l", 9, {.7F, 1.45F, 0}},
-        {"shoulder.r", 4, {-.1F, 1.45F, 0}}, {"arm.r", 11, {-.2F, 1.45F, 0}},
-        {"forearm.r", 12, {-.45F, 1.45F, 0}}, {"hand.r", 13, {-.7F, 1.45F, 0}},
-        {"thigh.l", 1, {.1F, .95F, 0}}, {"shin.l", 15, {.1F, .5F, 0}}, {"foot.l", 16, {.1F, .08F, 0}},
-        {"thigh.r", 1, {-.1F, .95F, 0}}, {"shin.r", 18, {-.1F, .5F, 0}}, {"foot.r", 19, {-.1F, .08F, 0}},
+        {"Root", -1, {0, 0, 0}},
+        {"pelvis", 0, {0, 1, 0}},
+        {"skirt", 1, {0, .9F, .1F}},
+        {"tummy", 1, {0, 1.1F, 0}},
+        {"chest", 3, {0, 1.3F, 0}},
+        {"neck", 4, {0, 1.5F, 0}},
+        {"head", 5, {0, 1.6F, 0}},
+        {"shoulder.l", 4, {.1F, 1.45F, 0}},
+        {"arm.l", 7, {.2F, 1.45F, 0}},
+        {"forearm.l", 8, {.45F, 1.45F, 0}},
+        {"hand.l", 9, {.7F, 1.45F, 0}},
+        {"shoulder.r", 4, {-.1F, 1.45F, 0}},
+        {"arm.r", 11, {-.2F, 1.45F, 0}},
+        {"forearm.r", 12, {-.45F, 1.45F, 0}},
+        {"hand.r", 13, {-.7F, 1.45F, 0}},
+        {"thigh.l", 1, {.1F, .95F, 0}},
+        {"shin.l", 15, {.1F, .5F, 0}},
+        {"foot.l", 16, {.1F, .08F, 0}},
+        {"thigh.r", 1, {-.1F, .95F, 0}},
+        {"shin.r", 18, {-.1F, .5F, 0}},
+        {"foot.r", 19, {-.1F, .08F, 0}},
     };
     skintokens::skeleton rig;
     for (const auto &j : joints) {

@@ -429,9 +429,15 @@ matrix4 inverse_affine(const matrix4 &m) {
     if (std::abs(det) < 1e-12F) return identity_matrix();
     const float s = 1.0F / det;
     matrix4 r{};
-    r[0] = A * s; r[4] = -(b * i - c * h) * s; r[8] = (b * f - c * e) * s;
-    r[1] = B * s; r[5] = (a * i - c * g) * s; r[9] = -(a * f - c * d) * s;
-    r[2] = C * s; r[6] = -(a * h - b * g) * s; r[10] = (a * e - b * d) * s;
+    r[0] = A * s;
+    r[4] = -(b * i - c * h) * s;
+    r[8] = (b * f - c * e) * s;
+    r[1] = B * s;
+    r[5] = (a * i - c * g) * s;
+    r[9] = -(a * f - c * d) * s;
+    r[2] = C * s;
+    r[6] = -(a * h - b * g) * s;
+    r[10] = (a * e - b * d) * s;
     r[15] = 1.0F;
     r[12] = -(r[0] * m[12] + r[4] * m[13] + r[8] * m[14]);
     r[13] = -(r[1] * m[12] + r[5] * m[13] + r[9] * m[14]);
@@ -2230,7 +2236,7 @@ result<std::vector<std::byte>> add_animation_glb_memory(
     if (animation.root_joint != 0U) {
         matrix4 parent_world = identity_matrix();
         for (std::int32_t node = node_parent[root_node], depth = 0; node >= 0 && depth < 4096;
-             node = node_parent[static_cast<std::size_t>(node)], ++depth) {
+            node = node_parent[static_cast<std::size_t>(node)], ++depth) {
             auto local = node_matrix(root["nodes"][static_cast<std::size_t>(node)]);
             if (!local) return std::unexpected(local.error());
             parent_world = multiply(*local, parent_world);
