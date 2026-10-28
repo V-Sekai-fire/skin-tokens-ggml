@@ -46,3 +46,14 @@ add_test(NAME skintokens-vrm-humanoid-test COMMAND skintokens-vrm-humanoid-test)
 add_executable(skintokens-non-indexed-glb-test non_indexed_glb_test.cpp)
 target_link_libraries(skintokens-non-indexed-glb-test PRIVATE skintokens::skintokens nlohmann_json::nlohmann_json)
 add_test(NAME skintokens-non-indexed-glb-test COMMAND skintokens-non-indexed-glb-test)
+
+# Standalone repro: run the add_soma30_motion_glb_memory path on a real authored
+# rigged GLB (459 joints, 3 skins). Not a ctest; invoked manually with the GLB as argv[1].
+add_executable(skintokens-repro repro_repro.cpp)
+target_link_libraries(skintokens-repro PRIVATE skintokens::skintokens)
+
+# Structural round-trip: add a SOMA30 rest clip and verify the produced GLB's
+# animation channels target valid nodes. Not a ctest; invoked with a rigged GLB.
+add_executable(skintokens-rt-verify rt_verify.cpp)
+target_link_libraries(skintokens-rt-verify PRIVATE skintokens::skintokens nlohmann_json::nlohmann_json)
+target_include_directories(skintokens-rt-verify PRIVATE ${CMAKE_SOURCE_DIR}/include)
