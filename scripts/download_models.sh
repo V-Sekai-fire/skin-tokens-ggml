@@ -6,7 +6,7 @@ revision="79736cad0fd84de384d5eede659b4ebd24effe33"
 destination="${1:-checkpoints}"
 
 command -v hf >/dev/null 2>&1 || {
-  echo "hf CLI is required (available in 'nix develop')" >&2
+  echo "hf CLI is required (install with 'pip install -U huggingface_hub' or 'brew install hf')" >&2
   exit 1
 }
 
