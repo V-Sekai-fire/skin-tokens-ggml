@@ -27,20 +27,9 @@ ctest --test-dir build/release --output-on-failure
 ./build/release/bin/skintokens-cli inspect models/SkinTokens-GGUF/F16
 ```
 
-Nix is optional. It supplies the build tools and Vulkan development packages,
-but does not replace the normal CMake build:
+The sanitizer build is the normal development lane (no Nix required):
 
 ```sh
-nix develop
-cmake --preset debug
-cmake --build --preset debug -j
-ctest --preset debug
-```
-
-The sanitizer build is the normal development lane:
-
-```sh
-nix develop
 cmake --preset asan-ubsan
 cmake --build --preset asan-ubsan -j
 ctest --preset asan-ubsan
