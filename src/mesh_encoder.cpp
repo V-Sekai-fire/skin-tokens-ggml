@@ -21,8 +21,10 @@ ggml_tensor *need(const weight_component &weights, const std::string &name) {
 
 ggml_tensor *linear(ggml_context *context, ggml_tensor *input, const weight_component &weights,
     const std::string &stem, bool bias = true) {
-    auto *output = ggml_mul_mat(context, need(weights, stem + ".w"), input);
-    ggml_mul_mat_set_prec(output, GGML_PREC_F32);
+    auto *weight = need(weights, stem + ".w");
+    auto *weight_lo = weights.tensor(stem + ".w.lo");
+    ggml_tensor *output = weight_lo != nullptr ? mul_mat_x3(context, weight, weight_lo, input) : ggml_mul_mat(context, weight, input);
+    if (weight_lo == nullptr) ggml_mul_mat_set_prec(output, GGML_PREC_F32);
     if (bias) {
         auto *value = need(weights, stem + ".b");
         if (value->type != output->type) value = ggml_cast(context, value, output->type);
@@ -204,8 +206,9 @@ result<std::vector<float>> encode_mesh(const weight_component &weights, ggml_bac
     // c_kv's output rows are per head: K (head_dim rows) then V. One head at a time keeps the
     // 54K-point projection and scores under the web's 128 MiB binding.
     auto *kv_weight = need(weights, cross + ".attn.c_kv.w");
+    auto *kv_weight_lo = weights.tensor(cross + ".attn.c_kv.w.lo");
     auto *attended = attend_by_head(context, q, heads, head_dim, data_count, [&](std::int64_t head) {
-        return rows_linear(context, kv_weight, nullptr, head * 2 * head_dim, 2 * head_dim, data);
+        return rows_linear(context, kv_weight, nullptr, head * 2 * head_dim, 2 * head_dim, data, kv_weight_lo);
     });
     state = ggml_add(context, state, linear(context, attended, weights, cross + ".attn.c_proj"));
     state = ggml_add(context, state, mlp(context, norm(context, state, weights, cross + ".ln_3"), weights, cross + ".mlp"));

@@ -14,11 +14,18 @@ constexpr std::size_t score_budget = std::size_t{64} << 20U;
 } // namespace
 
 ggml_tensor *rows_linear(ggml_context *context, ggml_tensor *weight, ggml_tensor *bias,
-    std::int64_t first_row, std::int64_t rows, ggml_tensor *input) {
+    std::int64_t first_row, std::int64_t rows, ggml_tensor *input, ggml_tensor *weight_lo) {
     auto *slice = ggml_view_2d(context, weight, weight->ne[0], rows, weight->nb[1],
         static_cast<std::size_t>(first_row) * weight->nb[1]);
-    auto *output = ggml_mul_mat(context, slice, input);
-    ggml_mul_mat_set_prec(output, GGML_PREC_F32);
+    ggml_tensor *output;
+    if (weight_lo != nullptr) {
+        auto *slice_lo = ggml_view_2d(context, weight_lo, weight_lo->ne[0], rows, weight_lo->nb[1],
+            static_cast<std::size_t>(first_row) * weight_lo->nb[1]);
+        output = mul_mat_x3(context, ggml_cont(context, slice), ggml_cont(context, slice_lo), input);
+    } else {
+        output = ggml_mul_mat(context, slice, input);
+        ggml_mul_mat_set_prec(output, GGML_PREC_F32);
+    }
     if (bias != nullptr) {
         auto *part = ggml_view_1d(context, bias, rows, static_cast<std::size_t>(first_row) * bias->nb[0]);
         if (part->type != output->type) part = ggml_cast(context, part, output->type);
