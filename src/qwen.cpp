@@ -1298,8 +1298,8 @@ result<generated_rig_tokens> generate_rig_tokens(
                 // the J*4 span. Consequently EOS is the fourth FSQ value of
                 // the final joint (index 32768 after subtracting vocab_size).
                 if (codes + 1U < parsed.joints * 4U) {
-                    allowed.reserve(static_cast<std::size_t>(last_skin - 258 + 1));
-                    for (std::int32_t token = 258; token <= last_skin; ++token) allowed.push_back(token);
+                    allowed.reserve(static_cast<std::size_t>(last_skin - first_skin + 1));
+                    for (std::int32_t token = first_skin; token <= last_skin; ++token) allowed.push_back(token);
                 } else if (codes + 1U == parsed.joints * 4U) allowed.push_back(final_eos);
                 else continue;
             }

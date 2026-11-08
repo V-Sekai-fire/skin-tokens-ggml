@@ -28,6 +28,8 @@ Rig a mesh:
 
 Run `skintokens-cli` with no arguments to list every command. The `docs/` folder has the build options, command usage, the C API, the demo, checkpoint conversion, reference parity and the humanoid motion pipeline.
 
+**Known issue:** on some Vulkan backends (confirmed on an RTX 4090) the F16 checkpoints produce NaN logits during TokenRig generation, which silently degrades `rig` output to a maxed-out, meaningless skeleton. If a rigged mesh always comes back with exactly 256 joints and near-uniform skin weights, switch to the F32 checkpoints (`hf download LocalAI-io/SkinTokens-GGUF --include "F32/*" --local-dir models/SkinTokens-GGUF`, then point `rig` at that directory) — F32-on-Vulkan was confirmed to reproduce CPU-F16 scores almost exactly. See issue for details.
+
 ## Licence
 
 This project is Apache-2.0; see `LICENSE`. The upstream SkinTokens code and weights are MIT. `NOTICE` keeps the upstream attribution, and `CITATION.cff` lists the sources to cite.
