@@ -16,6 +16,7 @@ with F32 inputs (no such mixed pipeline exists upstream on coopmat2).
 Norm/embedding/sensitive tensors stay F32 untouched, matching
 convert_to_gguf.py's own "sensitive" set.
 """
+
 import sys
 import numpy as np
 from gguf import GGUFReader, GGUFWriter, GGUFValueType, GGMLQuantizationType
@@ -64,7 +65,9 @@ def main():
 
     writer = GGUFWriter(dst_path, arch="skintokens", use_temp_file=False)
     writer.add_string("skintokens.component", kv["skintokens.component"])
-    writer.add_string("skintokens.upstream_revision", kv["skintokens.upstream_revision"])
+    writer.add_string(
+        "skintokens.upstream_revision", kv["skintokens.upstream_revision"]
+    )
     writer.add_string("skintokens.tokenrig_sha256", kv["skintokens.tokenrig_sha256"])
     writer.add_string("skintokens.skin_vae_sha256", kv["skintokens.skin_vae_sha256"])
     writer.add_uint32("skintokens.format_version", 1)
@@ -77,8 +80,15 @@ def main():
         sensitive = any(part in name for part in SENSITIVE)
         if is_matrix and not sensitive:
             hi, lo = split_hi_lo(data)
-            writer.add_tensor(name, hi, raw_shape=data.shape, raw_dtype=GGMLQuantizationType.BF16)
-            writer.add_tensor(name + ".lo", lo, raw_shape=data.shape, raw_dtype=GGMLQuantizationType.BF16)
+            writer.add_tensor(
+                name, hi, raw_shape=data.shape, raw_dtype=GGMLQuantizationType.BF16
+            )
+            writer.add_tensor(
+                name + ".lo",
+                lo,
+                raw_shape=data.shape,
+                raw_dtype=GGMLQuantizationType.BF16,
+            )
             converted += 1
         else:
             writer.add_tensor(name, data)
@@ -88,7 +98,9 @@ def main():
     writer.write_kv_data_to_file()
     writer.write_tensors_to_file()
     writer.close()
-    print(f"split {converted} tensors into bf16 hi/lo pairs, kept {kept} as-is -> {dst_path}")
+    print(
+        f"split {converted} tensors into bf16 hi/lo pairs, kept {kept} as-is -> {dst_path}"
+    )
 
 
 if __name__ == "__main__":

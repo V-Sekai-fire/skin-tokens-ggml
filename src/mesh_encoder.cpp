@@ -23,8 +23,7 @@ ggml_tensor *linear(ggml_context *context, ggml_tensor *input, const weight_comp
     const std::string &stem, bool bias = true) {
     auto *weight = need(weights, stem + ".w");
     auto *weight_lo = weights.tensor(stem + ".w.lo");
-    ggml_tensor *output = weight_lo != nullptr ? mul_mat_x3(context, weight, weight_lo, input)
-                                                : ggml_mul_mat(context, weight, input);
+    ggml_tensor *output = weight_lo != nullptr ? mul_mat_x3(context, weight, weight_lo, input) : ggml_mul_mat(context, weight, input);
     if (weight_lo == nullptr) ggml_mul_mat_set_prec(output, GGML_PREC_F32);
     if (bias) {
         auto *value = need(weights, stem + ".b");
