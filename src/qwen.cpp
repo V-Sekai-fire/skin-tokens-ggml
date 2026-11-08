@@ -80,7 +80,9 @@ ggml_tensor *required(const weight_component &weights, std::string_view name) {
     return value;
 }
 
-ggml_tensor *linear(ggml_context *context, ggml_tensor *input, ggml_tensor *weight) {
+ggml_tensor *linear(ggml_context *context, ggml_tensor *input, ggml_tensor *weight,
+    ggml_tensor *weight_lo = nullptr) {
+    if (weight_lo != nullptr) return mul_mat_x3(context, weight, weight_lo, input);
     auto *output = ggml_mul_mat(context, weight, input);
     ggml_mul_mat_set_prec(output, GGML_PREC_F32);
     return output;
@@ -113,13 +115,16 @@ ggml_tensor *qwen_layer_graph(ggml_context *context, ggml_tensor *input,
     const auto get = [&](std::string_view suffix) {
         return required(weights, prefix + std::string{suffix});
     };
+    const auto get_lo = [&](std::string_view suffix) {
+        return weights.tensor(prefix + std::string{suffix} + ".lo");
+    };
     const auto batch = input->ne[2];
     auto *normalized = rms(context, input, get("an.w"), 1e-6F);
-    auto *q = ggml_reshape_4d(context, linear(context, normalized, get("attn.q.w")),
+    auto *q = ggml_reshape_4d(context, linear(context, normalized, get("attn.q.w"), get_lo("attn.q.w")),
         head_dim, heads, sequence, batch);
-    auto *k = ggml_reshape_4d(context, linear(context, normalized, get("attn.k.w")),
+    auto *k = ggml_reshape_4d(context, linear(context, normalized, get("attn.k.w"), get_lo("attn.k.w")),
         head_dim, kv_heads, sequence, batch);
-    auto *v = ggml_reshape_4d(context, linear(context, normalized, get("attn.v.w")),
+    auto *v = ggml_reshape_4d(context, linear(context, normalized, get("attn.v.w"), get_lo("attn.v.w")),
         head_dim, kv_heads, sequence, batch);
     q = rms(context, q, get("attn.q_norm.w"), 1e-6F);
     k = rms(context, k, get("attn.k_norm.w"), 1e-6F);
@@ -140,12 +145,12 @@ ggml_tensor *qwen_layer_graph(ggml_context *context, ggml_tensor *input,
         ggml_soft_max(context, scores));
     ggml_mul_mat_set_prec(attended, GGML_PREC_F32);
     attended = ggml_cont(context, ggml_permute(context, attended, 0, 2, 1, 3));
-    auto *state = ggml_add(context, input, linear(context, ggml_reshape_3d(context, attended, heads * head_dim, sequence, batch), get("attn.o.w")));
+    auto *state = ggml_add(context, input, linear(context, ggml_reshape_3d(context, attended, heads * head_dim, sequence, batch), get("attn.o.w"), get_lo("attn.o.w")));
     normalized = rms(context, state, get("fn.w"), 1e-6F);
-    auto *gate = ggml_silu(context, linear(context, normalized, get("mlp.g.w")));
-    auto *up = linear(context, normalized, get("mlp.u.w"));
+    auto *gate = ggml_silu(context, linear(context, normalized, get("mlp.g.w"), get_lo("mlp.g.w")));
+    auto *up = linear(context, normalized, get("mlp.u.w"), get_lo("mlp.u.w"));
     return ggml_add(context, state,
-        linear(context, ggml_mul(context, gate, up), get("mlp.d.w")));
+        linear(context, ggml_mul(context, gate, up), get("mlp.d.w"), get_lo("mlp.d.w")));
 }
 
 std::vector<float> read_f32(ggml_tensor *tensor) {
@@ -504,7 +509,7 @@ public:
         auto *normalized = rms(context.get(), state, required(weights_, "llm.norm.w"), 1e-6F);
         auto *last = ggml_view_2d(context.get(), normalized, hidden, 1, normalized->nb[1],
             (sequence - 1U) * normalized->nb[1]);
-        auto *logits = linear(context.get(), last, required(weights_, "llm.out.w"));
+        auto *logits = linear(context.get(), last, required(weights_, "llm.out.w"), weights_.tensor("llm.out.w.lo"));
         auto *graph = ggml_new_graph_custom(context.get(), 8192, false);
         ggml_build_forward_expand(graph, logits);
         auto allocator = allocator_ptr{
@@ -570,7 +575,7 @@ public:
         auto *normalized = rms(context.get(), state, required(weights_, "llm.norm.w"), 1e-6F);
         auto *last = ggml_reshape_2d(context.get(), normalized, hidden,
             static_cast<std::int64_t>(batch));
-        auto *logits = linear(context.get(), last, required(weights_, "llm.out.w"));
+        auto *logits = linear(context.get(), last, required(weights_, "llm.out.w"), weights_.tensor("llm.out.w.lo"));
         auto *graph = ggml_new_graph_custom(context.get(), 8192, false);
         ggml_build_forward_expand(graph, logits);
         auto allocator = allocator_ptr{
@@ -681,12 +686,15 @@ private:
         const auto get = [&](std::string_view suffix) {
             return required(weights_, prefix + std::string{suffix});
         };
+        const auto get_lo = [&](std::string_view suffix) {
+            return weights_.tensor(prefix + std::string{suffix} + ".lo");
+        };
         auto *normalized = rms(context, input, get("an.w"), 1e-6F);
-        auto *q = ggml_reshape_4d(context, linear(context, normalized, get("attn.q.w")),
+        auto *q = ggml_reshape_4d(context, linear(context, normalized, get("attn.q.w"), get_lo("attn.q.w")),
             head_dim, heads, sequence, 1);
-        auto *k = ggml_reshape_4d(context, linear(context, normalized, get("attn.k.w")),
+        auto *k = ggml_reshape_4d(context, linear(context, normalized, get("attn.k.w"), get_lo("attn.k.w")),
             head_dim, kv_heads, sequence, 1);
-        auto *v = ggml_reshape_4d(context, linear(context, normalized, get("attn.v.w")),
+        auto *v = ggml_reshape_4d(context, linear(context, normalized, get("attn.v.w"), get_lo("attn.v.w")),
             head_dim, kv_heads, sequence, 1);
         q = rms(context, q, get("attn.q_norm.w"), 1e-6F);
         k = rms(context, k, get("attn.k_norm.w"), 1e-6F);
@@ -709,12 +717,12 @@ private:
             ggml_soft_max(context, scores));
         ggml_mul_mat_set_prec(attended, GGML_PREC_F32);
         attended = ggml_cont(context, ggml_permute(context, attended, 0, 2, 1, 3));
-        auto *state = ggml_add(context, input, linear(context, ggml_reshape_2d(context, attended, heads * head_dim, sequence), get("attn.o.w")));
+        auto *state = ggml_add(context, input, linear(context, ggml_reshape_2d(context, attended, heads * head_dim, sequence), get("attn.o.w"), get_lo("attn.o.w")));
         normalized = rms(context, state, get("fn.w"), 1e-6F);
-        auto *gate = ggml_silu(context, linear(context, normalized, get("mlp.g.w")));
-        auto *up = linear(context, normalized, get("mlp.u.w"));
+        auto *gate = ggml_silu(context, linear(context, normalized, get("mlp.g.w"), get_lo("mlp.g.w")));
+        auto *up = linear(context, normalized, get("mlp.u.w"), get_lo("mlp.u.w"));
         return ggml_add(context, state,
-            linear(context, ggml_mul(context, gate, up), get("mlp.d.w")));
+            linear(context, ggml_mul(context, gate, up), get("mlp.d.w"), get_lo("mlp.d.w")));
     }
 
     ggml_tensor *decode_layer(ggml_context *context, ggml_tensor *input,
@@ -724,13 +732,16 @@ private:
         const auto get = [&](std::string_view suffix) {
             return required(weights_, prefix + std::string{suffix});
         };
+        const auto get_lo = [&](std::string_view suffix) {
+            return weights_.tensor(prefix + std::string{suffix} + ".lo");
+        };
         const auto batch = static_cast<std::int64_t>(slots.size());
         auto *normalized = rms(context, input, get("an.w"), 1e-6F);
-        auto *q = ggml_reshape_4d(context, linear(context, normalized, get("attn.q.w")),
+        auto *q = ggml_reshape_4d(context, linear(context, normalized, get("attn.q.w"), get_lo("attn.q.w")),
             head_dim, heads, 1, batch);
-        auto *k_new = ggml_reshape_4d(context, linear(context, normalized, get("attn.k.w")),
+        auto *k_new = ggml_reshape_4d(context, linear(context, normalized, get("attn.k.w"), get_lo("attn.k.w")),
             head_dim, kv_heads, 1, batch);
-        auto *v_new = ggml_reshape_4d(context, linear(context, normalized, get("attn.v.w")),
+        auto *v_new = ggml_reshape_4d(context, linear(context, normalized, get("attn.v.w"), get_lo("attn.v.w")),
             head_dim, kv_heads, 1, batch);
         q = rms(context, q, get("attn.q_norm.w"), 1e-6F);
         k_new = rms(context, k_new, get("attn.k_norm.w"), 1e-6F);
@@ -765,12 +776,12 @@ private:
             ggml_soft_max(context, scores));
         ggml_mul_mat_set_prec(attended, GGML_PREC_F32);
         attended = ggml_cont(context, ggml_permute(context, attended, 0, 2, 1, 3));
-        auto *state = ggml_add(context, input, linear(context, ggml_reshape_3d(context, attended, heads * head_dim, 1, batch), get("attn.o.w")));
+        auto *state = ggml_add(context, input, linear(context, ggml_reshape_3d(context, attended, heads * head_dim, 1, batch), get("attn.o.w"), get_lo("attn.o.w")));
         normalized = rms(context, state, get("fn.w"), 1e-6F);
-        auto *gate = ggml_silu(context, linear(context, normalized, get("mlp.g.w")));
-        auto *up = linear(context, normalized, get("mlp.u.w"));
+        auto *gate = ggml_silu(context, linear(context, normalized, get("mlp.g.w"), get_lo("mlp.g.w")));
+        auto *up = linear(context, normalized, get("mlp.u.w"), get_lo("mlp.u.w"));
         return ggml_add(context, state,
-            linear(context, ggml_mul(context, gate, up), get("mlp.d.w")));
+            linear(context, ggml_mul(context, gate, up), get("mlp.d.w"), get_lo("mlp.d.w")));
     }
 
     void clone_slot(std::size_t source, std::size_t destination, std::size_t length) {
@@ -918,14 +929,15 @@ result<std::vector<float>> run_qwen_layer(const weight_component &weights, ggml_
     const auto seq = static_cast<std::int64_t>(sequence);
     const std::string prefix = "llm.l." + std::to_string(layer) + ".";
     auto get = [&](std::string_view suffix) { return required(weights, prefix + std::string{suffix}); };
+    auto get_lo = [&](std::string_view suffix) { return weights.tensor(prefix + std::string{suffix} + ".lo"); };
     auto *x = ggml_new_tensor_2d(context, GGML_TYPE_F32, hidden, seq);
     auto *positions = ggml_new_tensor_1d(context, GGML_TYPE_I32, seq);
     ggml_set_input(x);
     ggml_set_input(positions);
     auto *normalized = rms(context, x, get("an.w"), 1e-6F);
-    auto *q = ggml_reshape_3d(context, linear(context, normalized, get("attn.q.w")), head_dim, heads, seq);
-    auto *k = ggml_reshape_3d(context, linear(context, normalized, get("attn.k.w")), head_dim, kv_heads, seq);
-    auto *v = ggml_reshape_3d(context, linear(context, normalized, get("attn.v.w")), head_dim, kv_heads, seq);
+    auto *q = ggml_reshape_3d(context, linear(context, normalized, get("attn.q.w"), get_lo("attn.q.w")), head_dim, heads, seq);
+    auto *k = ggml_reshape_3d(context, linear(context, normalized, get("attn.k.w"), get_lo("attn.k.w")), head_dim, kv_heads, seq);
+    auto *v = ggml_reshape_3d(context, linear(context, normalized, get("attn.v.w"), get_lo("attn.v.w")), head_dim, kv_heads, seq);
     q = rms(context, q, get("attn.q_norm.w"), 1e-6F);
     k = rms(context, k, get("attn.k_norm.w"), 1e-6F);
     q = ggml_rope_ext(context, q, positions, nullptr, head_dim, GGML_ROPE_TYPE_NEOX,
@@ -945,12 +957,12 @@ result<std::vector<float>> run_qwen_layer(const weight_component &weights, ggml_
         ggml_soft_max(context, scores));
     ggml_mul_mat_set_prec(attended, GGML_PREC_F32);
     attended = ggml_cont(context, ggml_permute(context, attended, 0, 2, 1, 3));
-    auto *state = ggml_add(context, x, linear(context, ggml_reshape_2d(context, attended, heads * head_dim, seq), get("attn.o.w")));
+    auto *state = ggml_add(context, x, linear(context, ggml_reshape_2d(context, attended, heads * head_dim, seq), get("attn.o.w"), get_lo("attn.o.w")));
     normalized = rms(context, state, get("fn.w"), 1e-6F);
-    auto *gate = ggml_silu(context, linear(context, normalized, get("mlp.g.w")));
-    auto *up = linear(context, normalized, get("mlp.u.w"));
+    auto *gate = ggml_silu(context, linear(context, normalized, get("mlp.g.w"), get_lo("mlp.g.w")));
+    auto *up = linear(context, normalized, get("mlp.u.w"), get_lo("mlp.u.w"));
     auto *output = ggml_add(context, state,
-        linear(context, ggml_mul(context, gate, up), get("mlp.d.w")));
+        linear(context, ggml_mul(context, gate, up), get("mlp.d.w"), get_lo("mlp.d.w")));
     auto *graph = ggml_new_graph_custom(context, 4096, false);
     ggml_build_forward_expand(graph, output);
     auto *allocator = ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend));
@@ -1003,7 +1015,7 @@ result<std::vector<float>> run_qwen_head(const weight_component &weights, ggml_b
     auto *final_norm = rms(context, x, required(weights, "llm.norm.w"), 1e-6F);
     auto *last = ggml_view_2d(context, final_norm, hidden, 1, final_norm->nb[1],
         (sequence - 1U) * final_norm->nb[1]);
-    auto *logits = linear(context, last, required(weights, "llm.out.w"));
+    auto *logits = linear(context, last, required(weights, "llm.out.w"), weights.tensor("llm.out.w.lo"));
     auto *graph = ggml_new_graph_custom(context, 1024, false);
     ggml_build_forward_expand(graph, logits);
     auto *allocator = ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend));

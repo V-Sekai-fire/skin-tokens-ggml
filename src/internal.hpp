@@ -122,7 +122,42 @@ struct weight_component {
 
 // A [rows, data] slice of `weight`'s output rows, plus the matching bias slice when given.
 [[nodiscard]] ggml_tensor *rows_linear(ggml_context *context, ggml_tensor *weight, ggml_tensor *bias,
-    std::int64_t first_row, std::int64_t rows, ggml_tensor *input);
+    std::int64_t first_row, std::int64_t rows, ggml_tensor *input, ggml_tensor *weight_lo = nullptr);
+
+// XLA's ALG_DOT_BF16_BF16_F32_X3: `weight_hi`/`weight_lo` are a bf16 hi/lo split of an
+// original F32 matrix (see scripts/f32_to_bf16x3_gguf.py; hi+lo reconstructs the original F32
+// weight to within ~2e-4 relative error). For a matrix input (ne[1] > 1, ggml-vulkan's mat-mat
+// dispatch) splitting the F32 input into bf16 hi/lo too and summing all three cross terms
+// (dropping the negligible lo.lo) recovers near-F32 matmul accuracy from bf16xbf16->f32
+// hardware alone -- measured mean relative error ~0.001 vs F32, against ~7 for a plain single
+// bf16 cast. For a single-vector input (ne[1] == 1, ggml-vulkan's dequant mat-vec dispatch)
+// casting the input to bf16 is not just unnecessary but unsupported: that kernel's GGML_ASSERT
+// on its activand type rejects bf16 outright. There we keep the input as F32 and sum just the
+// two (already near-F32-precise) weight terms; empirically this still lands at the fallback
+// dequant-mat-mat's F16-bounded precision rather than true F32 (ggml's BF16-weight dequant
+// path appears to compute through an F16 intermediate there), so it is a partial improvement
+// over plain bf16 (full weight precision, not full input precision) rather than X3's full
+// recovery -- but it is the combination that does not crash.
+[[nodiscard]] inline ggml_tensor *mul_mat_x3(ggml_context *context, ggml_tensor *weight_hi,
+    ggml_tensor *weight_lo, ggml_tensor *input) {
+    if (input->ne[1] == 1) {
+        auto *hi = ggml_mul_mat(context, weight_hi, input);
+        ggml_mul_mat_set_prec(hi, GGML_PREC_F32);
+        auto *lo = ggml_mul_mat(context, weight_lo, input);
+        ggml_mul_mat_set_prec(lo, GGML_PREC_F32);
+        return ggml_add(context, hi, lo);
+    }
+    auto *input_hi = ggml_cast(context, input, GGML_TYPE_BF16);
+    auto *input_hi_f32 = ggml_cast(context, input_hi, GGML_TYPE_F32);
+    auto *input_lo = ggml_cast(context, ggml_sub(context, input, input_hi_f32), GGML_TYPE_BF16);
+    auto *hi_hi = ggml_mul_mat(context, weight_hi, input_hi);
+    ggml_mul_mat_set_prec(hi_hi, GGML_PREC_F32);
+    auto *hi_lo = ggml_mul_mat(context, weight_hi, input_lo);
+    ggml_mul_mat_set_prec(hi_lo, GGML_PREC_F32);
+    auto *lo_hi = ggml_mul_mat(context, weight_lo, input_hi);
+    ggml_mul_mat_set_prec(lo_hi, GGML_PREC_F32);
+    return ggml_add(context, ggml_add(context, hi_hi, hi_lo), lo_hi);
+}
 
 // Multi-head attention one head at a time, queries in blocks, so no intermediate exceeds
 // 64 MiB. q is [heads * head_dim, queries]; head_kv(h) returns [2 * head_dim, data] (K rows,
