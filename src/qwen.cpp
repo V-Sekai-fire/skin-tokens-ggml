@@ -1136,6 +1136,11 @@ result<std::vector<std::int32_t>> generate_skin_codes(
     qwen_kv_generator generator{weights, backend, mesh_sequence, capacity, options.beams};
     auto current_logits = generator.prefill(mesh_embeddings, skeleton_tokens);
     if (!current_logits) return std::unexpected(current_logits.error());
+    if (std::any_of(current_logits->begin(), current_logits->end(),
+            [](float value) { return std::isnan(value); }))
+        return std::unexpected(fail(error_code::compute,
+            "TokenRig logits are NaN (seen on some Vulkan F16 coopmat GPUs; "
+            "retry with F32 GGUF weights or --device cpu)"));
     std::size_t cached_length = mesh_sequence + skeleton_tokens.size();
     std::mt19937_64 random{options.seed};
     std::vector<std::int32_t> generated;
@@ -1148,6 +1153,11 @@ result<std::vector<std::int32_t>> generate_skin_codes(
             current_logits = generator.decode(
                 std::span{&generated.back(), 1U}, std::span{&slot, 1U}, cached_length);
             if (!current_logits) return std::unexpected(current_logits.error());
+            if (std::any_of(current_logits->begin(), current_logits->end(),
+                    [](float value) { return std::isnan(value); }))
+                return std::unexpected(fail(error_code::compute,
+                    "TokenRig logits are NaN (seen on some Vulkan F16 coopmat GPUs; "
+                    "retry with F32 GGUF weights or --device cpu)"));
             ++cached_length;
         }
     } else {
@@ -1229,6 +1239,11 @@ result<std::vector<std::int32_t>> generate_skin_codes(
             }
             current_logits = generator.decode(next_tokens, next_slots, cached_length);
             if (!current_logits) return std::unexpected(current_logits.error());
+            if (std::any_of(current_logits->begin(), current_logits->end(),
+                    [](float value) { return std::isnan(value); }))
+                return std::unexpected(fail(error_code::compute,
+                    "TokenRig logits are NaN (seen on some Vulkan F16 coopmat GPUs; "
+                    "retry with F32 GGUF weights or --device cpu)"));
             ++cached_length;
         }
         generated = std::move(beams.front().tokens);
@@ -1260,6 +1275,11 @@ result<generated_rig_tokens> generate_rig_tokens(
     qwen_kv_generator generator{weights, backend, mesh_sequence, capacity, options.beams};
     auto current_logits = generator.prefill(mesh_embeddings, start);
     if (!current_logits) return std::unexpected(current_logits.error());
+    if (std::any_of(current_logits->begin(), current_logits->end(),
+            [](float value) { return std::isnan(value); }))
+        return std::unexpected(fail(error_code::compute,
+            "TokenRig logits are NaN (seen on some Vulkan F16 coopmat GPUs; "
+            "retry with F32 GGUF weights or --device cpu)"));
     std::size_t cached_length = mesh_sequence + std::size(start);
     struct beam_state {
         std::vector<std::int32_t> tokens;
@@ -1373,6 +1393,11 @@ result<generated_rig_tokens> generate_rig_tokens(
         }
         current_logits = generator.decode(next_tokens, slots, cached_length);
         if (!current_logits) return std::unexpected(current_logits.error());
+        if (std::any_of(current_logits->begin(), current_logits->end(),
+                [](float value) { return std::isnan(value); }))
+            return std::unexpected(fail(error_code::compute,
+                "TokenRig logits are NaN (seen on some Vulkan F16 coopmat GPUs; "
+                "retry with F32 GGUF weights or --device cpu)"));
         ++cached_length;
     }
     if (finished.empty()) {
